@@ -28,7 +28,6 @@
         未登录
       </div>
     </div>
-    <LoginDialog ref="loginRef" />
   </div>
 </template>
 
@@ -37,14 +36,13 @@ import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { Headset } from '@element-plus/icons-vue'
 import { authState, fetchAuthStatus, logout } from '../utils/auth'
-import LoginDialog from './LoginDialog.vue'
 
 const route = useRoute()
-const loginRef = ref(null)
 const menuVisible = ref(false)
 
 function openLogin() {
-  loginRef.value?.open()
+  // 通过事件通知 App.vue 打开登录弹窗
+  window.dispatchEvent(new CustomEvent('open-login-dialog'))
 }
 
 async function refresh() {

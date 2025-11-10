@@ -1,5 +1,13 @@
 <template>
-  <el-dialog v-model="visible" title="登录网易云音乐" width="420px" :close-on-click-modal="false">
+  <el-dialog 
+    v-model="visible" 
+    title="登录网易云音乐" 
+    width="420px" 
+    :close-on-click-modal="false"
+    :append-to-body="true"
+    :center="true"
+    align-center
+  >
     <div v-if="loading" class="center">
       <el-icon class="spin"><Loading /></el-icon>
       <div class="hint">正在生成二维码...</div>
@@ -119,6 +127,13 @@ onUnmounted(stopTimers)
 .status { text-align: center; margin: 10px 0; color: #666; }
 .status .warn { color: #e6a23c; }
 .actions { display: flex; justify-content: flex-end; gap: 10px; }
+</style>
+
+<style>
+/* 确保弹窗在页面中央显示，不受父组件影响 */
+.el-dialog__wrapper {
+  z-index: 2000 !important;
+}
 </style>
 
 

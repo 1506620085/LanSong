@@ -167,8 +167,6 @@
         @pause="isPlaying = false"
         @error="handleError"
       />
-      <!-- 登录弹窗（仅播放器页自动弹出） -->
-      <LoginDialog ref="loginRef" />
     </div>
   </div>
 </template>
@@ -184,10 +182,8 @@ import api from '../utils/api'
 import socket from '../utils/socket'
 import { formatDuration } from '../utils/format'
 import { authState, fetchAuthStatus } from '../utils/auth'
-import LoginDialog from '../components/LoginDialog.vue'
 
 const audioRef = ref(null)
-const loginRef = ref(null)
 const currentSong = ref(null)
 const queue = ref([])
 const isPlaying = ref(false)
@@ -397,7 +393,10 @@ onMounted(() => {
   // 检查登录状态，未登录则 1s 后自动弹出
   fetchAuthStatus().then(() => {
     if (!authState.isLoggedIn) {
-      setTimeout(() => loginRef.value?.open(), 1000)
+      // 通过事件通知 App.vue 打开登录弹窗
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('open-login-dialog'))
+      }, 1000)
     }
   })
 
