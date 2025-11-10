@@ -7,6 +7,8 @@ const {
   login_qr_key,
   login_qr_create,
   login_qr_check,
+  login_status,
+  user_account,
   cloudsearch, 
   song_url, 
   song_detail, 
@@ -173,6 +175,69 @@ class MusicApi {
         }
       }, checkInterval);
     });
+  }
+
+  // 检查登录状态
+  async checkLoginStatus(cookie) {
+    try {
+      const useCookie = cookie || this.cookie;
+      if (!useCookie) {
+        this.isLoggedIn = false;
+        return { success: true, isLoggedIn: false };
+      }
+      const result = await login_status({
+        cookie: useCookie,
+        timestamp: Date.now()
+      });
+      const hasAccount = !!result?.body?.data?.account;
+      this.isLoggedIn = hasAccount;
+      return { success: true, isLoggedIn: hasAccount, raw: result.body };
+    } catch (error) {
+      console.error('检查登录状态异常:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // 获取用户信息
+  async getUserInfo(cookie) {
+    try {
+      const useCookie = cookie || this.cookie;
+      if (!useCookie) {
+        return { success: false, error: '未登录' };
+      }
+      const result = await user_account({
+        cookie: useCookie,
+        timestamp: Date.now()
+      });
+      if (result?.body?.code === 200 && result?.body?.profile) {
+        const p = result.body.profile;
+        return {
+          success: true,
+          data: {
+            userId: p.userId,
+            nickname: p.nickname,
+            avatarUrl: p.avatarUrl,
+            vipType: p.vipType
+          }
+        };
+      }
+      return { success: false, error: '获取用户信息失败' };
+    } catch (error) {
+      console.error('获取用户信息异常:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // 设置 Cookie
+  setCookie(cookie) {
+    this.cookie = cookie || '';
+    this.isLoggedIn = !!cookie;
+  }
+
+  // 退出登录（仅清理内存态）
+  logout() {
+    this.cookie = '';
+    this.isLoggedIn = false;
   }
 
   // 搜索歌曲

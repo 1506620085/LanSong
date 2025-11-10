@@ -31,6 +31,9 @@ api.interceptors.response.use(
 
 // API 方法
 export default {
+  // 暴露底层以便扩展（谨慎使用）
+  _raw: api,
+
   // 获取状态
   getStatus() {
     return api.get('/api/status')
@@ -89,6 +92,20 @@ export default {
   // 移动歌曲位置
   moveSong(fromIndex, toIndex) {
     return api.post('/api/queue/move', { fromIndex, toIndex })
-  }
+  },
+
+  // 认证相关
+  getAuthStatus() {
+    return api.get('/api/auth/status')
+  },
+  createAuthQr() {
+    return api.get('/api/auth/qr/new')
+  },
+  checkAuthQr(key) {
+    return api.get('/api/auth/qr/status', { params: { key } })
+  },
+  logout() {
+    return api.post('/api/auth/logout')
+  },
 }
 

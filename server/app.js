@@ -33,6 +33,47 @@ if (fs.existsSync(publicPath)) {
 
 // ============ API 路由 ============
 
+// ============ 认证相关 API ============
+// 生成二维码
+app.get('/api/auth/qr/new', async (req, res) => {
+  try {
+    const qrResult = await musicApi.loginWithQRCode();
+    res.json(qrResult);
+  } catch (e) {
+    res.json({ success: false, error: e.message });
+  }
+});
+
+// 查询二维码状态
+app.get('/api/auth/qr/status', async (req, res) => {
+  const { key } = req.query;
+  if (!key) return res.json({ success: false, error: '缺少 key' });
+  const status = await musicApi.checkQRCodeStatus(key);
+  if (status.status === 'success') {
+    // 登录成功后，广播登录状态
+    io.emit('auth-status', { isLoggedIn: true });
+  }
+  res.json(status);
+});
+
+// 登录状态
+app.get('/api/auth/status', async (req, res) => {
+  const status = await musicApi.checkLoginStatus();
+  let profile = null;
+  if (status.success && status.isLoggedIn) {
+    const info = await musicApi.getUserInfo();
+    if (info.success) profile = info.data;
+  }
+  res.json({ success: true, isLoggedIn: !!status.isLoggedIn, profile });
+});
+
+// 退出登录
+app.post('/api/auth/logout', (req, res) => {
+  musicApi.logout();
+  io.emit('auth-status', { isLoggedIn: false });
+  res.json({ success: true });
+});
+
 // 登录状态检查
 app.get('/api/status', (req, res) => {
   res.json({
@@ -198,33 +239,8 @@ async function startServer() {
   const loginMethod = config.loginMethod || 'qrcode';
   
   if (loginMethod === 'qrcode') {
-    // 二维码登录（推荐）
-    try {
-      const qrResult = await musicApi.loginWithQRCode();
-      
-      if (qrResult.success) {
-        console.log('========================================');
-        console.log('📱 请使用网易云音乐 APP 扫描二维码登录');
-        console.log('========================================\n');
-        
-        // 在控制台显示二维码
-        const qrcode = require('qrcode-terminal');
-        qrcode.generate(qrResult.qrUrl, { small: true });
-        
-        console.log(`\n💡 如果二维码无法显示，请访问以下链接：`);
-        console.log(`   ${qrResult.qrUrl}\n`);
-        console.log('⏳ 二维码有效期 2 分钟，等待扫码中...\n');
-        
-        // 等待扫码登录
-        await musicApi.waitForQRCodeLogin(qrResult.key);
-        console.log('');
-      } else {
-        console.error('⚠️  生成二维码失败，部分功能可能受限\n');
-      }
-    } catch (error) {
-      console.error('⚠️  二维码登录失败:', error.message);
-      console.error('   部分功能可能受限\n');
-    }
+    // 网页端扫码登录：启动时不在控制台输出二维码，前端弹窗完成登录
+    console.log('🔐 登录模式：网页端二维码登录（在前端弹窗中完成）\n');
   } else if (loginMethod === 'password' && config.phone && config.password) {
     // 手机号密码登录（不推荐，容易被风控）
     console.log('📱 正在使用手机号密码登录...');
