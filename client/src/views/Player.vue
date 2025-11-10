@@ -8,9 +8,9 @@
           主控播放器
         </h1>
         <div class="header-actions">
-          <el-button 
-            :icon="RefreshRight" 
-            circle 
+          <el-button
+            :icon="RefreshRight"
+            circle
             @click="loadQueue"
             title="刷新队列"
           />
@@ -22,8 +22,8 @@
         <div v-if="currentSong" class="player-content">
           <!-- 专辑封面 -->
           <div class="album-cover-wrapper">
-            <img 
-              :src="currentSong.albumPic + '?param=300y300'" 
+            <img
+              :src="currentSong.albumPic + '?param=300y300'"
               class="album-cover"
               :class="{ rotating: isPlaying }"
             />
@@ -52,24 +52,24 @@
 
           <!-- 播放控制 -->
           <div class="controls">
-            <el-button 
-              :icon="DArrowLeft" 
-              circle 
+            <el-button
+              :icon="DArrowLeft"
+              circle
               size="large"
               @click="playPrevious"
               :disabled="!hasPrevious"
             />
-            <el-button 
-              :icon="isPlaying ? VideoPause : VideoPlay" 
-              circle 
+            <el-button
+              :icon="isPlaying ? VideoPause : VideoPlay"
+              circle
               size="large"
               type="primary"
               @click="togglePlay"
               class="play-button"
             />
-            <el-button 
-              :icon="DArrowRight" 
-              circle 
+            <el-button
+              :icon="DArrowRight"
+              circle
               size="large"
               @click="playNext"
               :disabled="queue.length === 0"
@@ -105,10 +105,10 @@
             <el-icon><List /></el-icon>
             播放队列 ({{ queue.length }})
           </div>
-          <el-button 
+          <el-button
             v-if="queue.length > 0"
-            :icon="Delete" 
-            size="small" 
+            :icon="Delete"
+            size="small"
             @click="clearQueue"
           >
             清空
@@ -116,8 +116,8 @@
         </div>
 
         <div class="queue-list" v-if="queue.length > 0">
-          <div 
-            v-for="(song, index) in queue" 
+          <div
+            v-for="(song, index) in queue"
             :key="song.queueId"
             class="queue-item"
           >
@@ -160,9 +160,9 @@
 <script setup>
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { 
-  Headset, VideoPlay, VideoPause, DArrowLeft, DArrowRight, 
-  List, Delete, Microphone, RefreshRight 
+import {
+  Headset, VideoPlay, VideoPause, DArrowLeft, DArrowRight,
+  List, Delete, Microphone, RefreshRight
 } from '@element-plus/icons-vue'
 import api from '../utils/api'
 import socket from '../utils/socket'
@@ -325,7 +325,7 @@ const handleError = (e) => {
 const handleQueueUpdate = (state) => {
   queue.value = state.queue || []
   hasPrevious.value = state.historyLength > 0
-  
+
   // 如果当前没有播放且队列有歌曲，自动播放第一首
   if (!currentSong.value && state.queue && state.queue.length > 0) {
     playNext()
@@ -436,10 +436,10 @@ onUnmounted(() => {
 .album-cover {
   width: 300px;
   height: 300px;
-  border-radius: 20px;
   object-fit: cover;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
   transition: transform 0.3s;
+  border-radius: 100%;
 }
 
 .album-cover.rotating {
