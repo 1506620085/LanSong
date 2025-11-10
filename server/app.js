@@ -1,0 +1,273 @@
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const cors = require('cors');
+const path = require('path');
+const fs = require('fs');
+
+const musicApi = require('./api');
+const playQueue = require('./queue');
+
+// 读取配置文件
+const config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf-8'));
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+});
+
+// 中间件
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// 静态文件服务（生产环境）
+const publicPath = path.join(__dirname, 'public');
+if (fs.existsSync(publicPath)) {
+  app.use(express.static(publicPath));
+}
+
+// ============ API 路由 ============
+
+// 登录状态检查
+app.get('/api/status', (req, res) => {
+  res.json({
+    success: true,
+    isLoggedIn: musicApi.isLoggedIn,
+    queueLength: playQueue.getQueue().length
+  });
+});
+
+// 搜索歌曲
+app.get('/api/search', async (req, res) => {
+  const { keyword } = req.query;
+  if (!keyword) {
+    return res.json({ success: false, error: '请输入搜索关键词' });
+  }
+
+  const result = await musicApi.searchSongs(keyword);
+  res.json(result);
+});
+
+// 获取歌曲播放URL
+app.get('/api/song/url/:id', async (req, res) => {
+  const { id } = req.params;
+  const result = await musicApi.getSongUrl(id);
+  res.json(result);
+});
+
+// 获取歌曲详情
+app.get('/api/song/detail/:id', async (req, res) => {
+  const { id } = req.params;
+  const result = await musicApi.getSongDetail(id);
+  res.json(result);
+});
+
+// 获取歌词
+app.get('/api/lyric/:id', async (req, res) => {
+  const { id } = req.params;
+  const result = await musicApi.getLyric(id);
+  res.json(result);
+});
+
+// ============ 播放队列 API ============
+
+// 获取播放队列
+app.get('/api/queue', (req, res) => {
+  res.json({
+    success: true,
+    data: playQueue.getState()
+  });
+});
+
+// 添加歌曲到队列
+app.post('/api/queue/add', (req, res) => {
+  const song = req.body;
+  if (!song.id || !song.name) {
+    return res.json({ success: false, error: '歌曲信息不完整' });
+  }
+
+  const added = playQueue.addSong(song);
+  
+  // 广播队列更新
+  io.emit('queue-updated', playQueue.getState());
+  
+  res.json({ success: true, data: added });
+});
+
+// 删除队列中的歌曲
+app.delete('/api/queue/:queueId', (req, res) => {
+  const { queueId } = req.params;
+  const result = playQueue.removeSong(parseFloat(queueId));
+  
+  // 广播队列更新
+  io.emit('queue-updated', playQueue.getState());
+  
+  res.json(result);
+});
+
+// 播放下一首
+app.post('/api/queue/next', (req, res) => {
+  const nextSong = playQueue.playNext();
+  
+  // 广播播放状态更新
+  io.emit('play-next', {
+    currentSong: nextSong,
+    queue: playQueue.getQueue()
+  });
+  
+  res.json({ success: true, data: nextSong });
+});
+
+// 播放上一首
+app.post('/api/queue/previous', (req, res) => {
+  const prevSong = playQueue.playPrevious();
+  
+  // 广播播放状态更新
+  io.emit('play-previous', {
+    currentSong: prevSong,
+    queue: playQueue.getQueue()
+  });
+  
+  res.json({ success: true, data: prevSong });
+});
+
+// 清空队列
+app.post('/api/queue/clear', (req, res) => {
+  playQueue.clear();
+  
+  // 广播队列更新
+  io.emit('queue-updated', playQueue.getState());
+  
+  res.json({ success: true });
+});
+
+// 移动歌曲位置
+app.post('/api/queue/move', (req, res) => {
+  const { fromIndex, toIndex } = req.body;
+  const result = playQueue.moveSong(fromIndex, toIndex);
+  
+  if (result.success) {
+    // 广播队列更新
+    io.emit('queue-updated', playQueue.getState());
+  }
+  
+  res.json(result);
+});
+
+// ============ Socket.IO ============
+
+io.on('connection', (socket) => {
+  console.log('✓ 客户端连接:', socket.id);
+
+  // 发送当前状态给新连接的客户端
+  socket.emit('queue-updated', playQueue.getState());
+
+  socket.on('disconnect', () => {
+    console.log('✗ 客户端断开:', socket.id);
+  });
+
+  // 播放器心跳
+  socket.on('player-heartbeat', (data) => {
+    io.emit('player-status', data);
+  });
+});
+
+// ============ SPA 路由支持 ============
+app.get('*', (req, res) => {
+  const indexPath = path.join(publicPath, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(404).send('请先构建前端应用：cd client && npm run build');
+  }
+});
+
+// ============ 启动服务器 ============
+
+async function startServer() {
+  console.log('\n========================================');
+  console.log('🎵 局域网点歌系统启动中...');
+  console.log('========================================\n');
+
+  // 登录网易云音乐
+  const loginMethod = config.loginMethod || 'qrcode';
+  
+  if (loginMethod === 'qrcode') {
+    // 二维码登录（推荐）
+    try {
+      const qrResult = await musicApi.loginWithQRCode();
+      
+      if (qrResult.success) {
+        console.log('========================================');
+        console.log('📱 请使用网易云音乐 APP 扫描二维码登录');
+        console.log('========================================\n');
+        
+        // 在控制台显示二维码
+        const qrcode = require('qrcode-terminal');
+        qrcode.generate(qrResult.qrUrl, { small: true });
+        
+        console.log(`\n💡 如果二维码无法显示，请访问以下链接：`);
+        console.log(`   ${qrResult.qrUrl}\n`);
+        console.log('⏳ 二维码有效期 2 分钟，等待扫码中...\n');
+        
+        // 等待扫码登录
+        await musicApi.waitForQRCodeLogin(qrResult.key);
+        console.log('');
+      } else {
+        console.error('⚠️  生成二维码失败，部分功能可能受限\n');
+      }
+    } catch (error) {
+      console.error('⚠️  二维码登录失败:', error.message);
+      console.error('   部分功能可能受限\n');
+    }
+  } else if (loginMethod === 'password' && config.phone && config.password) {
+    // 手机号密码登录（不推荐，容易被风控）
+    console.log('📱 正在使用手机号密码登录...');
+    console.log('⚠️  建议使用二维码登录，更安全便捷\n');
+    const loginResult = await musicApi.login(config.phone, config.password);
+    if (!loginResult.success) {
+      console.error('⚠️  登录失败，部分功能可能受限');
+      console.error('   建议使用二维码登录\n');
+    }
+  } else {
+    console.log('⚠️  未配置登录方式');
+    console.log('   请在 config.json 中设置 "loginMethod": "qrcode"');
+    console.log('   部分功能可能受限\n');
+  }
+
+  const PORT = config.port || 3000;
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log('========================================');
+    console.log('✓ 服务器启动成功！');
+    console.log('========================================');
+    console.log(`\n📍 本地访问地址: http://localhost:${PORT}`);
+    
+    // 获取局域网IP
+    const os = require('os');
+    const interfaces = os.networkInterfaces();
+    console.log('\n📱 局域网访问地址:');
+    for (let name of Object.keys(interfaces)) {
+      for (let iface of interfaces[name]) {
+        if (iface.family === 'IPv4' && !iface.internal) {
+          console.log(`   http://${iface.address}:${PORT}`);
+        }
+      }
+    }
+    
+    console.log('\n🎮 使用说明:');
+    console.log(`   - 点歌页面: http://localhost:${PORT}/`);
+    console.log(`   - 主控播放器: http://localhost:${PORT}/player`);
+    console.log('\n========================================\n');
+  });
+}
+
+startServer().catch(error => {
+  console.error('启动失败:', error);
+  process.exit(1);
+});
+

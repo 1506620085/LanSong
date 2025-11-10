@@ -1,0 +1,6 @@
+{
+  "loginMethod": "qrcode",
+  "port": 3000,
+  "comment": "loginMethod 可选值: qrcode (推荐) 或 password"
+}
+
