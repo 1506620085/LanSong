@@ -64,10 +64,24 @@
           <div v-for="song in queue" :key="song.queueId" class="queue-item">
             <img :src="song.albumPic + '?param=50y50'" class="queue-album" />
             <div class="queue-info">
-              <div class="queue-name">{{ song.name }}</div>
+              <div class="queue-name">
+                {{ song.name }}
+                <el-tag v-if="currentSong && currentSong.id === song.id" type="success" size="small" class="playing-tag">
+                  正在播放中
+                </el-tag>
+              </div>
               <div class="queue-artist">{{ song.artists }}</div>
             </div>
             <div class="queue-duration">{{ formatDuration(song.duration) }}</div>
+            <el-button
+              v-if="!currentSong || currentSong.id !== song.id"
+              :icon="Top"
+              circle
+              size="small"
+              type="primary"
+              @click="handlePromote(song)"
+              title="顶置为下一首"
+            />
           </div>
         </div>
       </div>
@@ -115,7 +129,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Search, Plus, Headset, CaretRight, List } from '@element-plus/icons-vue'
+import { Search, Plus, Headset, CaretRight, List, Top } from '@element-plus/icons-vue'
 import api from '../utils/api'
 import socket from '../utils/socket'
 import { formatDuration } from '../utils/format'
@@ -126,6 +140,20 @@ const searchResults = ref([])
 const addingIds = ref([])
 const currentSong = ref(null)
 const queue = ref([])
+
+// 顶置歌曲
+const handlePromote = async (song) => {
+  try {
+    const result = await api.promoteSong(song.queueId)
+    if (result.success) {
+      ElMessage.success(`已顶置「${song.name}」`)
+    } else {
+      ElMessage.error(result.error || '顶置失败')
+    }
+  } catch (error) {
+    ElMessage.error('顶置失败，请检查网络连接')
+  }
+}
 
 // 搜索歌曲
 const handleSearch = async () => {
@@ -357,6 +385,13 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.playing-tag {
+  flex-shrink: 0;
 }
 
 .queue-artist {

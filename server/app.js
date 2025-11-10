@@ -200,6 +200,19 @@ app.post('/api/queue/move', (req, res) => {
   res.json(result);
 });
 
+// 顶置歌曲
+app.post('/api/queue/promote', (req, res) => {
+  const { queueId } = req.body;
+  if (!queueId) {
+    return res.json({ success: false, error: '缺少 queueId' });
+  }
+  const result = playQueue.promoteSong(parseFloat(queueId));
+  if (result.success) {
+    io.emit('queue-updated', playQueue.getState());
+  }
+  res.json(result);
+});
+
 // ============ Socket.IO ============
 
 io.on('connection', (socket) => {

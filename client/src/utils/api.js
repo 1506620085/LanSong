@@ -94,6 +94,11 @@ export default {
     return api.post('/api/queue/move', { fromIndex, toIndex })
   },
 
+  // 顶置歌曲
+  promoteSong(queueId) {
+    return api.post('/api/queue/promote', { queueId })
+  },
+
   // 认证相关
   getAuthStatus() {
     return api.get('/api/auth/status')

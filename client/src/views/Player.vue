@@ -124,10 +124,24 @@
             <div class="queue-index">{{ index + 1 }}</div>
             <img :src="song.albumPic + '?param=50y50'" class="queue-album" />
             <div class="queue-info">
-              <div class="queue-name">{{ song.name }}</div>
+              <div class="queue-name">
+                {{ song.name }}
+                <el-tag v-if="currentSong && currentSong.id === song.id" type="success" size="small" class="playing-tag">
+                  正在播放中
+                </el-tag>
+              </div>
               <div class="queue-artist">{{ song.artists }}</div>
             </div>
             <div class="queue-duration">{{ formatDuration(song.duration) }}</div>
+            <el-button
+              v-if="!currentSong || currentSong.id !== song.id"
+              :icon="Top"
+              circle
+              size="small"
+              type="primary"
+              @click="promoteSong(song)"
+              title="顶置为下一首"
+            />
             <el-button
               :icon="Delete"
               circle
@@ -164,7 +178,7 @@ import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Headset, VideoPlay, VideoPause, DArrowLeft, DArrowRight,
-  List, Delete, Microphone, RefreshRight
+  List, Delete, Microphone, RefreshRight, Top
 } from '@element-plus/icons-vue'
 import api from '../utils/api'
 import socket from '../utils/socket'
@@ -181,6 +195,20 @@ const currentTime = ref(0)
 const duration = ref(0)
 const volume = ref(80)
 const hasPrevious = ref(false)
+
+// 顶置歌曲
+const promoteSong = async (song) => {
+  try {
+    const result = await api.promoteSong(song.queueId)
+    if (result.success) {
+      ElMessage.success(`已顶置「${song.name}」`)
+    } else {
+      ElMessage.error(result.error || '操作失败')
+    }
+  } catch (error) {
+    ElMessage.error('操作失败，请稍后再试')
+  }
+}
 
 // 加载队列
 const loadQueue = async () => {
@@ -641,6 +669,13 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.playing-tag {
+  flex-shrink: 0;
 }
 
 .queue-artist {

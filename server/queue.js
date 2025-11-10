@@ -150,6 +150,41 @@ class PlayQueue {
 
     return { success: true, queue: this.queue };
   }
+
+  // 顶置歌曲（将歌曲移动到下一首位置）
+  promoteSong(queueId) {
+    const index = this.queue.findIndex(s => s.queueId === queueId);
+    if (index === -1) {
+      return { success: false, error: '歌曲不存在' };
+    }
+
+    // 如果是当前播放歌曲，直接返回
+    if (index === this.currentIndex) {
+      return { success: true, queue: this.queue, message: '当前歌曲正在播放' };
+    }
+
+    const [song] = this.queue.splice(index, 1);
+
+    // 如果移除位置在当前索引之前，需要调整 currentIndex
+    if (index < this.currentIndex) {
+      this.currentIndex--;
+    }
+
+    // 计算插入位置：当前歌曲之后，如果没有当前歌曲则插入队首
+    let targetIndex = this.currentIndex >= 0 ? this.currentIndex + 1 : 0;
+    if (targetIndex < 0) targetIndex = 0;
+    if (targetIndex > this.queue.length) targetIndex = this.queue.length;
+
+    this.queue.splice(targetIndex, 0, song);
+
+    // 如果插入位置在当前索引之前，currentIndex需要加1
+    if (targetIndex <= this.currentIndex) {
+      this.currentIndex++;
+    }
+
+    console.log(`⇧ 顶置歌曲: ${song.name}`);
+    return { success: true, queue: this.queue };
+  }
 }
 
 module.exports = new PlayQueue();
