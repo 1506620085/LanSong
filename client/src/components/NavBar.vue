@@ -25,7 +25,8 @@
         </el-dropdown>
       </div>
       <div v-else class="login-entry" @click="openLogin">
-        未登录
+        <el-icon class="unknown-avatar"><User /></el-icon>
+        <span class="login-text">未登录</span>
       </div>
     </div>
   </div>
@@ -34,7 +35,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { Headset } from '@element-plus/icons-vue'
+import { Headset, User } from '@element-plus/icons-vue'
 import { authState, fetchAuthStatus, logout } from '../utils/auth'
 
 const route = useRoute()
@@ -76,7 +77,28 @@ onMounted(() => {
 .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; cursor: pointer; }
 .links :deep(.el-button) { margin-left: 6px; }
 .right { display: flex; align-items: center; gap: 12px; }
-.login-entry { color: #666; cursor: pointer; }
+.login-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #666;
+}
+.login-entry:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: #333;
+}
+.unknown-avatar {
+  font-size: 18px;
+  color: #999;
+}
+.login-text {
+  font-size: 14px;
+}
 .user { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
 .dropdown-trigger { display: inline-block; width: 1px; height: 1px; }
