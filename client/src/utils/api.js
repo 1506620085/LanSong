@@ -40,8 +40,8 @@ export default {
   },
 
   // 搜索歌曲
-  searchSongs(keyword) {
-    return api.get('/api/search', { params: { keyword } })
+  searchSongs(keyword, limit = 30, offset = 0) {
+    return api.get('/api/search', { params: { keyword, limit, offset } })
   },
 
   // 获取歌曲播放URL

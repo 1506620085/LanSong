@@ -85,12 +85,12 @@ app.get('/api/status', (req, res) => {
 
 // 搜索歌曲
 app.get('/api/search', async (req, res) => {
-  const { keyword } = req.query;
+  const { keyword, limit = 30, offset = 0 } = req.query;
   if (!keyword) {
     return res.json({ success: false, error: '请输入搜索关键词' });
   }
 
-  const result = await musicApi.searchSongs(keyword);
+  const result = await musicApi.searchSongs(keyword, parseInt(limit), parseInt(offset));
   res.json(result);
 });
 

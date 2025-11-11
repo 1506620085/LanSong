@@ -17,7 +17,7 @@
           placeholder="输入歌曲名称或歌手名"
           size="large"
           clearable
-          @keyup.enter="handleSearch"
+          @keyup.enter="handleSearch(1)"
         >
           <template #prefix>
             <el-icon><Search /></el-icon>
@@ -25,7 +25,7 @@
           <template #append>
             <el-button 
               :icon="Search" 
-              @click="handleSearch"
+              @click="handleSearch(1)"
               :loading="searching"
             >
               搜索
@@ -90,7 +90,7 @@
       <div v-if="searchResults.length > 0" class="search-results">
         <div class="section-title">
           <el-icon><Search /></el-icon>
-          搜索结果 ({{ searchResults.length }})
+          搜索结果 ({{ searchTotal > 0 ? `共 ${searchTotal} 首` : searchResults.length }})
         </div>
         <div class="results-list">
           <div 
@@ -115,6 +115,16 @@
             </el-button>
           </div>
         </div>
+        <!-- 分页组件 -->
+        <div class="pagination-wrapper" v-if="searchTotal > pageSize">
+          <el-pagination
+            v-model:current-page="currentPage"
+            :page-size="pageSize"
+            :total="searchTotal"
+            layout="prev, pager, next, jumper"
+            @current-change="handlePageChange"
+          />
+        </div>
       </div>
 
       <!-- 空状态 -->
@@ -137,6 +147,9 @@ import { formatDuration } from '../utils/format'
 const searchKeyword = ref('')
 const searching = ref(false)
 const searchResults = ref([])
+const searchTotal = ref(0)
+const currentPage = ref(1)
+const pageSize = ref(30)
 const addingIds = ref([])
 const currentSong = ref(null)
 const queue = ref([])
@@ -156,20 +169,26 @@ const handlePromote = async (song) => {
 }
 
 // 搜索歌曲
-const handleSearch = async () => {
+const handleSearch = async (page = 1) => {
   if (!searchKeyword.value.trim()) {
     ElMessage.warning('请输入搜索关键词')
     return
   }
 
   searching.value = true
+  currentPage.value = page
+  const offset = (page - 1) * pageSize.value
+  
   try {
-    const result = await api.searchSongs(searchKeyword.value)
+    const result = await api.searchSongs(searchKeyword.value, pageSize.value, offset)
     if (result.success) {
-      searchResults.value = result.data
+      searchResults.value = result.data || []
+      searchTotal.value = result.total || 0
       if (result.data.length === 0) {
         ElMessage.info('未找到相关歌曲')
       }
+      // 滚动到搜索结果顶部
+      window.scrollTo({ top: 0, behavior: 'smooth' })
     } else {
       ElMessage.error(result.error || '搜索失败')
     }
@@ -178,6 +197,11 @@ const handleSearch = async () => {
   } finally {
     searching.value = false
   }
+}
+
+// 翻页处理
+const handlePageChange = (page) => {
+  handleSearch(page)
 }
 
 // 添加歌曲到队列
@@ -497,7 +521,138 @@ onUnmounted(() => {
   opacity: 0.8;
 }
 
+.pagination-wrapper {
+  display: flex;
+  justify-content: center;
+  padding: 20px 0;
+  margin-top: 20px;
+}
+
+/* 美化分页组件样式 */
+.pagination-wrapper :deep(.el-pagination) {
+  --el-pagination-button-width: 40px;
+  --el-pagination-button-height: 40px;
+  --el-pagination-button-radius: 8px;
+  --el-pagination-bg-color: rgba(255, 255, 255, 0.95);
+  --el-pagination-text-color: #333;
+  --el-pagination-border-radius: 8px;
+}
+
+.pagination-wrapper :deep(.el-pagination .btn-prev),
+.pagination-wrapper :deep(.el-pagination .btn-next) {
+  margin: 0 8px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  transition: all 0.3s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.pagination-wrapper :deep(.el-pagination .btn-prev:hover),
+.pagination-wrapper :deep(.el-pagination .btn-next:hover) {
+  background: rgba(102, 126, 234, 0.1);
+  border-color: rgba(102, 126, 234, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.2);
+}
+
+.pagination-wrapper :deep(.el-pagination .btn-prev:disabled),
+.pagination-wrapper :deep(.el-pagination .btn-next:disabled) {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.05);
+  opacity: 0.5;
+}
+
+.pagination-wrapper :deep(.el-pagination .el-pager li) {
+  margin: 0 4px;
+  min-width: 40px;
+  height: 40px;
+  line-height: 40px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  transition: all 0.3s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.pagination-wrapper :deep(.el-pagination .el-pager li:hover) {
+  background: rgba(102, 126, 234, 0.1);
+  border-color: rgba(102, 126, 234, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.2);
+  color: #667eea;
+}
+
+.pagination-wrapper :deep(.el-pagination .el-pager li.is-active) {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: #667eea;
+  color: white;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.pagination-wrapper :deep(.el-pagination .el-pagination__jump) {
+  margin-left: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: white;
+}
+
+/* "Go to" 文字样式 - 加粗白色 */
+.pagination-wrapper :deep(.el-pagination .el-pagination__jump > span:first-child),
+.pagination-wrapper :deep(.el-pagination .el-pagination__jump span) {
+  color: white !important;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.pagination-wrapper :deep(.el-pagination .el-pagination__jump .el-input) {
+  width: 60px;
+}
+
+.pagination-wrapper :deep(.el-pagination .el-pagination__jump .el-input__wrapper) {
+  background: transparent;
+  border-radius: 8px;
+  box-shadow: none;
+  padding: 0;
+  border: none;
+}
+
+.pagination-wrapper :deep(.el-pagination .el-pagination__jump .el-input__inner) {
+  height: 40px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.95);
+  transition: all 0.3s;
+  padding: 0 12px;
+}
+
+.pagination-wrapper :deep(.el-pagination .el-pagination__jump .el-input__inner:focus) {
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
 @media (max-width: 768px) {
+  .pagination-wrapper :deep(.el-pagination .el-pager li) {
+    margin: 0 2px;
+    min-width: 36px;
+    height: 36px;
+    line-height: 36px;
+    font-size: 14px;
+  }
+  
+  .pagination-wrapper :deep(.el-pagination .btn-prev),
+  .pagination-wrapper :deep(.el-pagination .btn-next) {
+    width: 36px;
+    height: 36px;
+    margin: 0 4px;
+  }
+  
+  .pagination-wrapper :deep(.el-pagination .el-pagination__jump) {
+    margin-left: 12px;
+    font-size: 14px;
+  }
+
   .title {
     font-size: 28px;
   }

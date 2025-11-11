@@ -241,17 +241,19 @@ class MusicApi {
   }
 
   // 搜索歌曲
-  async searchSongs(keyword, limit = 30) {
+  async searchSongs(keyword, limit = 30, offset = 0) {
     try {
       const result = await cloudsearch({
         keywords: keyword,
         limit,
+        offset,
         type: 1, // 1: 单曲
         cookie: this.cookie
       });
 
       if (result.body.code === 200) {
         const songs = result.body.result.songs || [];
+        const total = result.body.result.songCount || 0;
         return {
           success: true,
           data: songs.map(song => ({
@@ -261,7 +263,10 @@ class MusicApi {
             album: song.al.name,
             albumPic: song.al.picUrl,
             duration: song.dt
-          }))
+          })),
+          total,
+          offset,
+          limit
         };
       } else {
         return { success: false, error: '搜索失败' };
