@@ -9,6 +9,7 @@ const os = require('os');
 const musicApi = require('./api');
 const playQueue = require('./queue');
 const ipManager = require('./ip-manager');
+const quotaManager = require('./quota-manager');
 
 // 读取配置文件
 const config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf-8'));
@@ -172,6 +173,59 @@ app.post('/api/admin/clear-promote-history', requireHost, (req, res) => {
   });
 });
 
+// 获取限额配置（仅主机）
+app.get('/api/admin/quota-config', requireHost, (req, res) => {
+  const config = quotaManager.getConfig();
+  res.json({
+    success: true,
+    data: config
+  });
+});
+
+// 更新限额配置（仅主机）
+app.post('/api/admin/quota-config', requireHost, (req, res) => {
+  const { timeWindow, maxSongs } = req.body;
+  
+  if (!timeWindow || !maxSongs) {
+    return res.json({
+      success: false,
+      error: '参数不完整'
+    });
+  }
+  
+  if (timeWindow < 10 || timeWindow > 3600) {
+    return res.json({
+      success: false,
+      error: '时间窗口必须在10-3600秒之间'
+    });
+  }
+  
+  if (maxSongs < 1 || maxSongs > 100) {
+    return res.json({
+      success: false,
+      error: '歌曲数量必须在1-100首之间'
+    });
+  }
+  
+  const result = quotaManager.updateConfig(timeWindow, maxSongs);
+  res.json({
+    success: true,
+    message: '限额配置已更新',
+    data: quotaManager.getConfig()
+  });
+});
+
+// 获取用户限额状态
+app.get('/api/quota/status', (req, res) => {
+  const ip = getClientIP(req);
+  const hostCheck = isHost(ip);
+  const status = quotaManager.getUserStatus(ip, hostCheck);
+  res.json({
+    success: true,
+    data: status
+  });
+});
+
 // ============ 认证相关 API ============
 
 // 生成二维码
@@ -283,6 +337,21 @@ app.post('/api/queue/add', (req, res) => {
     });
   }
 
+  // 检查点歌限额（主机不受限制）
+  const hostCheck = isHost(ip);
+  const quotaCheck = quotaManager.checkQuota(ip, hostCheck);
+  if (!quotaCheck.allowed) {
+    return res.json({
+      success: false,
+      error: quotaCheck.error,
+      quotaExceeded: true,
+      waitTime: quotaCheck.waitTime,
+      current: quotaCheck.current,
+      max: quotaCheck.max,
+      timeWindow: quotaCheck.timeWindow
+    });
+  }
+
   // 在歌曲信息中添加点歌用户信息
   const user = ipManager.getUserByIP(ip);
   const songWithUser = {
@@ -292,6 +361,11 @@ app.post('/api/queue/add', (req, res) => {
   };
 
   const added = playQueue.addSong(songWithUser);
+  
+  // 记录点歌请求
+  if (added) {
+    quotaManager.recordRequest(ip, song.id);
+  }
   
   // 广播队列更新
   io.emit('queue-updated', playQueue.getState());

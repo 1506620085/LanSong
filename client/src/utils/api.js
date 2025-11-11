@@ -137,5 +137,15 @@ export default {
   clearPromoteHistory() {
     return api.post('/api/admin/clear-promote-history')
   },
+  // 限额配置
+  getQuotaConfig() {
+    return api.get('/api/admin/quota-config')
+  },
+  updateQuotaConfig(timeWindow, maxSongs) {
+    return api.post('/api/admin/quota-config', { timeWindow, maxSongs })
+  },
+  getQuotaStatus() {
+    return api.get('/api/quota/status')
+  },
 }
 

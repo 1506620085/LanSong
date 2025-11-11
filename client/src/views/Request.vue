@@ -264,6 +264,20 @@ const handleAddSong = async (song) => {
       ElMessage.success(`已添加「${song.name}」到播放队列`)
     } else if (result.needSetUsername) {
       ElMessage.warning(result.error || '请先设置用户名')
+    } else if (result.quotaExceeded) {
+      // 限额超限提示
+      const minutes = Math.floor(result.timeWindow / 60)
+      const seconds = result.timeWindow % 60
+      const timeText = minutes > 0 
+        ? (seconds > 0 ? `${minutes}分${seconds}秒` : `${minutes}分钟`)
+        : `${seconds}秒`
+      
+      ElMessage({
+        message: `点歌太频繁！当前限制：${timeText}内最多${result.max}首歌\n请等待 ${result.waitTime} 秒后再试`,
+        type: 'warning',
+        duration: 5000,
+        dangerouslyUseHTMLString: false
+      })
     } else {
       ElMessage.error(result.error || '添加失败')
     }
