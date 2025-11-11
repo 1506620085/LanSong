@@ -169,8 +169,10 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   height: 100px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.80) 0%, rgba(118, 75, 162, 0.80) 100%); /* 背景渐变 */
+  backdrop-filter: blur(10px); /* 背景模糊 */
+  -webkit-backdrop-filter: blur(10px); /* 背景模糊 */
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15); /* 阴影 */
   z-index: 999;
   display: flex;
   align-items: center;

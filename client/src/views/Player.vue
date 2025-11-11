@@ -495,6 +495,7 @@ onUnmounted(() => {
 .player-page {
   min-height: 100vh;
   padding: 20px;
+  padding-bottom: 120px; /* 为歌词栏预留空间 */
 }
 
 .player-container {
