@@ -7,6 +7,7 @@ const fs = require('fs');
 
 const musicApi = require('./api');
 const playQueue = require('./queue');
+const ipManager = require('./ip-manager');
 
 // 读取配置文件
 const config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf-8'));
@@ -31,7 +32,65 @@ if (fs.existsSync(publicPath)) {
   app.use(express.static(publicPath));
 }
 
+// 获取客户端真实IP地址
+function getClientIP(req) {
+  // 优先从代理头获取
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) {
+    return forwarded.split(',')[0].trim();
+  }
+  // 其他代理头
+  if (req.headers['x-real-ip']) {
+    return req.headers['x-real-ip'];
+  }
+  // 直连IP
+  const ip = req.socket.remoteAddress || req.connection.remoteAddress;
+  // 如果是IPv6的IPv4映射地址，提取IPv4部分
+  if (ip && ip.startsWith('::ffff:')) {
+    return ip.substring(7);
+  }
+  return ip || 'unknown';
+}
+
 // ============ API 路由 ============
+
+// ============ IP用户管理 API ============
+
+// 获取当前用户信息
+app.get('/api/user/info', (req, res) => {
+  const ip = getClientIP(req);
+  const user = ipManager.getUserByIP(ip);
+  res.json({
+    success: true,
+    data: {
+      ip: ip,
+      username: user?.username || null,
+      hasUsername: !!user?.username
+    }
+  });
+});
+
+// 设置用户名
+app.post('/api/user/setname', (req, res) => {
+  const ip = getClientIP(req);
+  const { username } = req.body;
+  
+  if (!username) {
+    return res.json({ success: false, error: '用户名不能为空' });
+  }
+  
+  const result = ipManager.setUsername(ip, username);
+  res.json(result);
+});
+
+// 获取所有用户（可选，用于管理）
+app.get('/api/user/all', (req, res) => {
+  const users = ipManager.getAllUsers();
+  res.json({
+    success: true,
+    data: users
+  });
+});
 
 // ============ 认证相关 API ============
 // 生成二维码
@@ -132,7 +191,25 @@ app.post('/api/queue/add', (req, res) => {
     return res.json({ success: false, error: '歌曲信息不完整' });
   }
 
-  const added = playQueue.addSong(song);
+  // 验证用户是否已设置用户名
+  const ip = getClientIP(req);
+  if (!ipManager.hasUsername(ip)) {
+    return res.json({ 
+      success: false, 
+      error: '请先设置用户名后再点歌',
+      needSetUsername: true 
+    });
+  }
+
+  // 在歌曲信息中添加点歌用户信息
+  const user = ipManager.getUserByIP(ip);
+  const songWithUser = {
+    ...song,
+    requestedBy: user.username,
+    requestedIP: ip
+  };
+
+  const added = playQueue.addSong(songWithUser);
   
   // 广播队列更新
   io.emit('queue-updated', playQueue.getState());

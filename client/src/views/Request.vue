@@ -8,6 +8,30 @@
           局域网点歌系统
         </h1>
         <p class="subtitle">搜索你喜欢的歌曲，添加到播放队列</p>
+        <!-- 用户信息显示 -->
+        <div class="user-info">
+          <el-card class="user-card">
+            <div class="user-content">
+              <el-icon class="user-icon"><User /></el-icon>
+              <div class="user-details">
+                <div class="user-ip">本机IP: {{ userInfo.ip || '获取中...' }}</div>
+                <div class="user-name">
+                  用户名: 
+                  <span v-if="userInfo.username" class="username-text">{{ userInfo.username }}</span>
+                  <span v-else class="no-username">未设置</span>
+                </div>
+              </div>
+              <el-button 
+                type="primary" 
+                size="small" 
+                @click="showUsernameDialog = true"
+                :icon="Edit"
+              >
+                {{ userInfo.username ? '修改用户名' : '设置用户名' }}
+              </el-button>
+            </div>
+          </el-card>
+        </div>
       </div>
 
       <!-- 搜索框 -->
@@ -71,6 +95,10 @@
                 </el-tag>
               </div>
               <div class="queue-artist">{{ song.artists }}</div>
+              <div v-if="song.requestedBy" class="queue-requester">
+                <el-icon><User /></el-icon>
+                {{ song.requestedBy }}
+              </div>
             </div>
             <div class="queue-duration">{{ formatDuration(song.duration) }}</div>
             <el-button
@@ -133,13 +161,48 @@
         <p class="empty-text">搜索歌曲开始点歌吧！</p>
       </div>
     </div>
+
+    <!-- 设置用户名对话框 -->
+    <el-dialog
+      v-model="showUsernameDialog"
+      title="设置用户名"
+      width="400px"
+      :close-on-click-modal="false"
+    >
+      <el-form @submit.prevent="handleSetUsername">
+        <el-form-item label="用户名" required>
+          <el-input
+            v-model="newUsername"
+            placeholder="请输入用户名（1-20个字符）"
+            maxlength="20"
+            show-word-limit
+            clearable
+            @keyup.enter="handleSetUsername"
+          />
+        </el-form-item>
+        <div class="dialog-tip">
+          <el-icon><InfoFilled /></el-icon>
+          提示：设置用户名后才能点歌，用户名将显示在队列中
+        </div>
+      </el-form>
+      <template #footer>
+        <el-button @click="showUsernameDialog = false">取消</el-button>
+        <el-button 
+          type="primary" 
+          @click="handleSetUsername"
+          :loading="settingUsername"
+        >
+          确定
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Search, Plus, Headset, CaretRight, List, Top } from '@element-plus/icons-vue'
+import { Search, Plus, Headset, CaretRight, List, Top, User, Edit, InfoFilled } from '@element-plus/icons-vue'
 import api from '../utils/api'
 import socket from '../utils/socket'
 import { formatDuration } from '../utils/format'
@@ -153,6 +216,16 @@ const pageSize = ref(30)
 const addingIds = ref([])
 const currentSong = ref(null)
 const queue = ref([])
+
+// 用户信息相关
+const userInfo = ref({
+  ip: '',
+  username: '',
+  hasUsername: false
+})
+const showUsernameDialog = ref(false)
+const newUsername = ref('')
+const settingUsername = ref(false)
 
 // 顶置歌曲
 const handlePromote = async (song) => {
@@ -204,13 +277,62 @@ const handlePageChange = (page) => {
   handleSearch(page)
 }
 
+// 获取用户信息
+const fetchUserInfo = async () => {
+  try {
+    const result = await api.getUserInfo()
+    if (result.success) {
+      userInfo.value = result.data
+      newUsername.value = result.data.username || ''
+    }
+  } catch (error) {
+    console.error('获取用户信息失败:', error)
+  }
+}
+
+// 设置用户名
+const handleSetUsername = async () => {
+  const username = newUsername.value.trim()
+  if (!username) {
+    ElMessage.warning('请输入用户名')
+    return
+  }
+
+  settingUsername.value = true
+  try {
+    const result = await api.setUsername(username)
+    if (result.success) {
+      ElMessage.success('用户名设置成功')
+      userInfo.value.username = username
+      userInfo.value.hasUsername = true
+      showUsernameDialog.value = false
+    } else {
+      ElMessage.error(result.error || '设置失败')
+    }
+  } catch (error) {
+    ElMessage.error('设置失败，请检查网络连接')
+  } finally {
+    settingUsername.value = false
+  }
+}
+
 // 添加歌曲到队列
 const handleAddSong = async (song) => {
+  // 检查是否已设置用户名
+  if (!userInfo.value.hasUsername) {
+    ElMessage.warning('请先设置用户名后再点歌')
+    showUsernameDialog.value = true
+    return
+  }
+
   addingIds.value.push(song.id)
   try {
     const result = await api.addToQueue(song)
     if (result.success) {
       ElMessage.success(`已添加「${song.name}」到播放队列`)
+    } else if (result.needSetUsername) {
+      ElMessage.warning(result.error || '请先设置用户名')
+      showUsernameDialog.value = true
     } else {
       ElMessage.error(result.error || '添加失败')
     }
@@ -229,6 +351,9 @@ const updateQueue = (state) => {
 
 // 初始化
 onMounted(async () => {
+  // 获取用户信息
+  await fetchUserInfo()
+
   // 连接 WebSocket
   socket.connect()
   socket.on('queue-updated', updateQueue)
@@ -290,6 +415,69 @@ onUnmounted(() => {
 .subtitle {
   font-size: 16px;
   opacity: 0.9;
+  margin-bottom: 20px;
+}
+
+/* 用户信息样式 */
+.user-info {
+  margin-top: 20px;
+}
+
+.user-card {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.user-content {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 5px;
+}
+
+.user-icon {
+  font-size: 32px;
+  color: #667eea;
+}
+
+.user-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.user-ip,
+.user-name {
+  font-size: 14px;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.user-ip {
+  font-weight: 500;
+}
+
+.username-text {
+  font-weight: bold;
+  color: #667eea;
+}
+
+.no-username {
+  color: #ff6b6b;
+  font-style: italic;
+}
+
+/* 对话框提示样式 */
+.dialog-tip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: #f0f7ff;
+  border-radius: 8px;
+  color: #667eea;
+  font-size: 13px;
+  margin-top: -10px;
 }
 
 .search-box {
@@ -424,6 +612,15 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.queue-requester {
+  font-size: 12px;
+  color: #667eea;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
 }
 
 .queue-duration {

@@ -112,5 +112,16 @@ export default {
   logout() {
     return api.post('/api/auth/logout')
   },
+
+  // 用户管理相关
+  getUserInfo() {
+    return api.get('/api/user/info')
+  },
+  setUsername(username) {
+    return api.post('/api/user/setname', { username })
+  },
+  getAllUsers() {
+    return api.get('/api/user/all')
+  },
 }
 
