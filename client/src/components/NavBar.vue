@@ -27,15 +27,16 @@
         <div class="divider"></div>
         
         <!-- 登录用户信息 -->
-        <div v-if="authState.isLoggedIn && authState.profile" class="user" @click="menuVisible=true">
-          <img :src="authState.profile.avatarUrl + '?param=40y40'" class="avatar" />
-          <span class="name">{{ authState.profile.nickname }}</span>
-          <el-dropdown v-model="menuVisible" trigger="click">
-            <span class="dropdown-trigger"></span>
+        <div v-if="authState.isLoggedIn && authState.profile" class="user">
+          <el-dropdown trigger="hover">
+            <div class="user-info-trigger">
+              <img :src="authState.profile.avatarUrl + '?param=40y40'" class="avatar" />
+              <span class="name">{{ authState.profile.nickname }}</span>
+              <el-icon class="arrow-icon"><ArrowDown /></el-icon>
+            </div>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item @click="refresh">刷新资料</el-dropdown-item>
-                <el-dropdown-item divided @click="doLogout">退出登录</el-dropdown-item>
+                <el-dropdown-item @click="doLogout">退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -87,13 +88,12 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { Headset, User, Monitor, InfoFilled } from '@element-plus/icons-vue'
+import { Headset, User, Monitor, InfoFilled, ArrowDown } from '@element-plus/icons-vue'
 import { authState, fetchAuthStatus, logout } from '../utils/auth'
 import api from '../utils/api'
 import { ElMessage } from 'element-plus'
 
 const route = useRoute()
-const menuVisible = ref(false)
 
 // 本机用户信息
 const localUserInfo = ref({
@@ -110,12 +110,14 @@ function openLogin() {
   window.dispatchEvent(new CustomEvent('open-login-dialog'))
 }
 
-async function refresh() {
-  await fetchAuthStatus()
-}
-
+// 退出登录
 async function doLogout() {
-  await logout()
+  try {
+    await logout()
+    ElMessage.success('已退出登录')
+  } catch (error) {
+    ElMessage.error('退出失败')
+  }
 }
 
 // 获取本机用户信息
@@ -205,9 +207,41 @@ onMounted(() => {
 .login-text {
   font-size: 14px;
 }
-.user { display: flex; align-items: center; gap: 8px; cursor: pointer; }
-.avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
-.dropdown-trigger { display: inline-block; width: 1px; height: 1px; }
+.user { 
+  display: flex; 
+  align-items: center; 
+}
+.user-info-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.user-info-trigger:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+.avatar { 
+  width: 28px; 
+  height: 28px; 
+  border-radius: 50%; 
+  object-fit: cover; 
+}
+.name {
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+}
+.arrow-icon {
+  font-size: 12px;
+  color: #999;
+  transition: transform 0.3s;
+}
+.user-info-trigger:hover .arrow-icon {
+  transform: translateY(2px);
+}
 
 /* 本机用户信息样式 */
 .local-user-info {

@@ -16,6 +16,12 @@
       <div class="qr-wrap" v-if="qrImg">
         <img :src="qrImg" class="qr" />
       </div>
+      <!-- 记住我选项 -->
+      <div class="remember-me" v-if="qrImg">
+        <el-checkbox v-model="rememberMe" size="small">
+          记住我（7天内免登录）
+        </el-checkbox>
+      </div>
       <div class="status">
         <span v-if="countdown > 0">二维码将在 {{ countdown }}s 后过期</span>
         <span v-else class="warn">二维码已过期</span>
@@ -41,6 +47,7 @@ const qrImg = ref('')
 const timer = ref(null)
 const poller = ref(null)
 const countdown = ref(120)
+const rememberMe = ref(false)
 
 const open = async () => {
   visible.value = true
@@ -67,9 +74,13 @@ const startPolling = () => {
   poller.value = setInterval(async () => {
     if (!qrKey.value) return
     try {
-      const res = await checkQrStatus(qrKey.value)
+      const res = await checkQrStatus(qrKey.value, rememberMe.value)
       if (res.status === 'success') {
-        ElMessage.success('登录成功')
+        if (rememberMe.value) {
+          ElMessage.success('登录成功！7天内免登录')
+        } else {
+          ElMessage.success('登录成功')
+        }
         close()
         // 刷新页面状态
         window.dispatchEvent(new CustomEvent('auth-updated'))
@@ -122,8 +133,28 @@ onUnmounted(stopTimers)
 }
 .spin { animation: spin 1s linear infinite; font-size: 32px; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.qr-wrap { display: flex; justify-content: center; }
-.qr { width: 260px; height: 260px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+.qr-wrap { 
+  display: flex; 
+  justify-content: center;
+  margin-bottom: 12px;
+}
+.qr { 
+  width: 260px; 
+  height: 260px; 
+  border-radius: 8px; 
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
+}
+.remember-me {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 20px;
+  margin-bottom: 8px;
+}
+.remember-me :deep(.el-checkbox__label) {
+  font-size: 13px;
+  color: #666;
+  user-select: none;
+}
 .status { text-align: center; margin: 10px 0; color: #666; }
 .status .warn { color: #e6a23c; }
 .actions { display: flex; justify-content: flex-end; gap: 10px; }

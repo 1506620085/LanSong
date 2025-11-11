@@ -105,9 +105,10 @@ app.get('/api/auth/qr/new', async (req, res) => {
 
 // 查询二维码状态
 app.get('/api/auth/qr/status', async (req, res) => {
-  const { key } = req.query;
+  const { key, rememberMe } = req.query;
   if (!key) return res.json({ success: false, error: '缺少 key' });
-  const status = await musicApi.checkQRCodeStatus(key);
+  const remember = rememberMe === 'true' || rememberMe === true;
+  const status = await musicApi.checkQRCodeStatus(key, remember);
   if (status.status === 'success') {
     // 登录成功后，广播登录状态
     io.emit('auth-status', { isLoggedIn: true });
@@ -321,9 +322,30 @@ app.get('*', (req, res) => {
 // ============ 启动服务器 ============
 
 async function startServer() {
-  console.log('\n========================================');
-  console.log('🎵 局域网点歌系统启动中...');
-  console.log('========================================\n');
+  console.log('\n========================================')
+  console.log('🎵 局域网点歌系统启动中...')
+  console.log('========================================\n')
+
+  // 尝试加载保存的Cookie
+  console.log('🔑 检查保存的登录状态...');
+  const loadResult = musicApi.loadCookieFromFile();
+  if (loadResult.success) {
+    // 验证Cookie是否有效
+    const status = await musicApi.checkLoginStatus();
+    if (status.isLoggedIn) {
+      const userInfo = await musicApi.getUserInfo();
+      if (userInfo.success) {
+        console.log(`✓ 自动登录成功！欢迎 ${userInfo.data.nickname}`);
+        console.log('');
+      } else {
+        console.log('⚠️  Cookie无效，需要重新登录\n');
+      }
+    } else {
+      console.log('⚠️  Cookie无效，需要重新登录\n');
+    }
+  } else {
+    console.log('ℹ️  未找到保存的登录信息\n');
+  }
 
   // 登录网易云音乐
   const loginMethod = config.loginMethod || 'qrcode';

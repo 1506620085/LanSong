@@ -106,8 +106,8 @@ export default {
   createAuthQr() {
     return api.get('/api/auth/qr/new')
   },
-  checkAuthQr(key) {
-    return api.get('/api/auth/qr/status', { params: { key } })
+  checkAuthQr(key, rememberMe = false) {
+    return api.get('/api/auth/qr/status', { params: { key, rememberMe } })
   },
   logout() {
     return api.post('/api/auth/logout')

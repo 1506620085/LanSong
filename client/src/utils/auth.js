@@ -31,8 +31,8 @@ export async function createQr() {
   return api.createAuthQr()
 }
 
-export async function checkQrStatus(key) {
-  return api.checkAuthQr(key)
+export async function checkQrStatus(key, rememberMe = false) {
+  return api.checkAuthQr(key, rememberMe)
 }
 
 

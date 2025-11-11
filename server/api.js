@@ -15,10 +15,71 @@ const {
   lyric 
 } = require('NeteaseCloudMusicApi');
 
+const COOKIE_FILE = path.join(__dirname, 'cookie.json');
+const COOKIE_EXPIRE_DAYS = 7; // Cookie有效期：7天
+
 class MusicApi {
   constructor() {
     this.cookie = '';
     this.isLoggedIn = false;
+  }
+
+  // 保存Cookie到文件
+  saveCookieToFile(cookie) {
+    try {
+      const expiresAt = Date.now() + COOKIE_EXPIRE_DAYS * 24 * 60 * 60 * 1000;
+      const data = {
+        cookie,
+        expiresAt,
+        savedAt: new Date().toISOString()
+      };
+      fs.writeFileSync(COOKIE_FILE, JSON.stringify(data, null, 2), 'utf-8');
+      console.log(`✓ Cookie已保存，有效期至 ${new Date(expiresAt).toLocaleString()}`);
+      return { success: true };
+    } catch (error) {
+      console.error('✗ 保存Cookie失败:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // 从文件加载Cookie
+  loadCookieFromFile() {
+    try {
+      if (!fs.existsSync(COOKIE_FILE)) {
+        return { success: false, error: 'Cookie文件不存在' };
+      }
+
+      const data = JSON.parse(fs.readFileSync(COOKIE_FILE, 'utf-8'));
+      
+      // 检查是否过期
+      if (Date.now() > data.expiresAt) {
+        console.log('⚠️  保存的Cookie已过期');
+        fs.unlinkSync(COOKIE_FILE); // 删除过期Cookie
+        return { success: false, error: 'Cookie已过期' };
+      }
+
+      this.cookie = data.cookie;
+      this.isLoggedIn = true;
+      console.log('✓ 已加载保存的Cookie');
+      return { success: true, cookie: data.cookie };
+    } catch (error) {
+      console.error('✗ 加载Cookie失败:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // 清除保存的Cookie文件
+  clearSavedCookie() {
+    try {
+      if (fs.existsSync(COOKIE_FILE)) {
+        fs.unlinkSync(COOKIE_FILE);
+        console.log('✓ 已清除保存的Cookie');
+      }
+      return { success: true };
+    } catch (error) {
+      console.error('✗ 清除Cookie失败:', error.message);
+      return { success: false, error: error.message };
+    }
   }
 
   // 手机号密码登录（已废弃，建议使用二维码登录）
@@ -89,7 +150,7 @@ class MusicApi {
   }
 
   // 检查二维码扫码状态
-  async checkQRCodeStatus(key) {
+  async checkQRCodeStatus(key, rememberMe = false) {
     try {
       const result = await login_qr_check({
         key,
@@ -107,6 +168,12 @@ class MusicApi {
         // 登录成功，保存 cookie
         this.cookie = result.body.cookie;
         this.isLoggedIn = true;
+        
+        // 如果勾选了“记住我”，则保存Cookie到文件
+        if (rememberMe) {
+          this.saveCookieToFile(result.body.cookie);
+        }
+        
         return { 
           success: true, 
           status: 'success',
@@ -234,10 +301,11 @@ class MusicApi {
     this.isLoggedIn = !!cookie;
   }
 
-  // 退出登录（仅清理内存态）
+  // 退出登录（清理内存态和保存的Cookie）
   logout() {
     this.cookie = '';
     this.isLoggedIn = false;
+    this.clearSavedCookie();
   }
 
   // 搜索歌曲
