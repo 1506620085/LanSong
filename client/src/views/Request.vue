@@ -142,6 +142,13 @@
         <p class="empty-text">搜索歌曲开始点歌吧！</p>
       </div>
     </div>
+    
+    <!-- 底部歌词栏 -->
+    <LyricBar
+      :current-song="currentSong"
+      :current-time="currentTime"
+      :is-playing="isPlaying"
+    />
   </div>
 </template>
 
@@ -152,6 +159,7 @@ import { Search, Plus, Headset, CaretRight, List, Top, User } from '@element-plu
 import api from '../utils/api'
 import socket from '../utils/socket'
 import { formatDuration } from '../utils/format'
+import LyricBar from '../components/LyricBar.vue'
 
 const searchKeyword = ref('')
 const searching = ref(false)
@@ -162,6 +170,8 @@ const pageSize = ref(30)
 const addingIds = ref([])
 const currentSong = ref(null)
 const queue = ref([])
+const currentTime = ref(0)
+const isPlaying = ref(false)
 
 // 格式化相对时间
 const formatRelativeTime = (timeStr) => {
@@ -313,6 +323,14 @@ onMounted(async () => {
     currentSong.value = data.currentSong
     queue.value = data.queue || []
   })
+  socket.on('player-status', (data) => {
+    // 同步播放器状态
+    if (data.currentSong) {
+      currentSong.value = data.currentSong
+    }
+    currentTime.value = data.currentTime || 0
+    isPlaying.value = data.isPlaying || false
+  })
 
   // 获取初始状态
   try {
@@ -331,6 +349,7 @@ onUnmounted(() => {
   socket.off('queue-updated')
   socket.off('play-next')
   socket.off('play-previous')
+  socket.off('player-status')
 })
 </script>
 

@@ -179,6 +179,13 @@
         @error="handleError"
       />
     </div>
+    
+    <!-- 底部歌词栏 -->
+    <LyricBar
+      :current-song="currentSong"
+      :current-time="currentTime"
+      :is-playing="isPlaying"
+    />
   </div>
 </template>
 
@@ -193,6 +200,7 @@ import api from '../utils/api'
 import socket from '../utils/socket'
 import { formatDuration } from '../utils/format'
 import { authState, fetchAuthStatus } from '../utils/auth'
+import LyricBar from '../components/LyricBar.vue'
 
 const audioRef = ref(null)
 const currentSong = ref(null)
@@ -413,6 +421,32 @@ watch(currentSong, (newSong) => {
   }
 })
 
+// 发送播放器状态心跳
+let heartbeatTimer = null
+
+function sendPlayerHeartbeat() {
+  socket.emit('player-heartbeat', {
+    currentSong: currentSong.value,
+    currentTime: currentTime.value,
+    isPlaying: isPlaying.value,
+    timestamp: Date.now()
+  })
+}
+
+function startHeartbeat() {
+  stopHeartbeat()
+  heartbeatTimer = setInterval(() => {
+    sendPlayerHeartbeat()
+  }, 1000) // 每秒发送一次
+}
+
+function stopHeartbeat() {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer)
+    heartbeatTimer = null
+  }
+}
+
 // 初始化
 onMounted(() => {
   // 检查登录状态，未登录则 1s 后自动弹出
@@ -438,6 +472,9 @@ onMounted(() => {
 
   // 加载初始队列
   loadQueue()
+  
+  // 启动心跳
+  startHeartbeat()
 })
 
 // 清理
@@ -448,6 +485,9 @@ onUnmounted(() => {
   socket.off('queue-updated')
   socket.off('play-next')
   socket.off('play-previous')
+  
+  // 停止心跳
+  stopHeartbeat()
 })
 </script>
 
