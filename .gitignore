@@ -4,6 +4,7 @@ server/public/
 *.log
 .DS_Store
 server/config.json
+server/ip-users.json
 .vscode/
 .idea/
 *.local
