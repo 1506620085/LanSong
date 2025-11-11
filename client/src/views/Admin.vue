@@ -77,6 +77,49 @@
             </div>
           </el-card>
 
+          <!-- 顶置历史记录 -->
+          <el-card class="section-card">
+            <template #header>
+              <div class="card-header">
+                <el-icon><Document /></el-icon>
+                <span>顶置历史记录</span>
+                <el-button
+                  v-if="promoteHistory.length > 0"
+                  size="small"
+                  type="danger"
+                  @click="handleClearHistory"
+                  style="margin-left: auto;"
+                >
+                  清除历史
+                </el-button>
+              </div>
+            </template>
+            <div v-if="promoteHistory.length > 0" class="promote-history-list">
+              <div
+                v-for="record in promoteHistory"
+                :key="record.queueId + record.promotedAt"
+                class="history-item"
+              >
+                <img :src="record.albumPic + '?param=50y50'" class="history-album" />
+                <div class="history-info">
+                  <div class="history-song">{{ record.songName }}</div>
+                  <div class="history-artist">{{ record.artist }}</div>
+                </div>
+                <div class="history-meta">
+                  <div class="history-time">{{ formatRelativeTime(record.promotedAt) }}</div>
+                  <div class="history-user">
+                    <el-icon><Top /></el-icon>
+                    {{ record.promotedBy }}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div v-else class="placeholder">
+              <el-icon class="placeholder-icon"><Document /></el-icon>
+              <p>暂无顶置记录</p>
+            </div>
+          </el-card>
+
           <!-- 系统信息 -->
           <el-card class="section-card">
             <template #header>
@@ -117,7 +160,8 @@ import {
   UserFilled, 
   Document, 
   DocumentAdd, 
-  InfoFilled 
+  InfoFilled,
+  Top
 } from '@element-plus/icons-vue'
 import api from '../utils/api'
 
@@ -128,6 +172,21 @@ const isHost = ref(false)
 const serverIP = ref('')
 const clientIP = ref('')
 const users = ref([])
+const promoteHistory = ref([])
+
+// 格式化相对时间
+const formatRelativeTime = (timeStr) => {
+  if (!timeStr) return ''
+  const now = new Date()
+  const time = new Date(timeStr)
+  const diff = Math.floor((now - time) / 1000) // 秒
+  
+  if (diff < 60) return '刚刚'
+  if (diff < 3600) return `${Math.floor(diff / 60)}分钟前`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}小时前`
+  if (diff < 2592000) return `${Math.floor(diff / 86400)}天前`
+  return time.toLocaleDateString('zh-CN')
+}
 
 // 验证是否是主机
 async function checkHostPermission() {
@@ -141,8 +200,9 @@ async function checkHostPermission() {
       if (!result.isHost) {
         ElMessage.error('您没有权限访问管理页面')
       } else {
-        // 加载用户列表
+        // 加载用户列表和顶置历史
         await fetchUsers()
+        await fetchPromoteHistory()
       }
     }
   } catch (error) {
@@ -151,6 +211,41 @@ async function checkHostPermission() {
     isHost.value = false
   } finally {
     checking.value = false
+  }
+}
+
+// 获取顶置历史记录
+async function fetchPromoteHistory() {
+  try {
+    const result = await api.getPromoteHistory(50)
+    if (result.success) {
+      promoteHistory.value = result.data
+    }
+  } catch (error) {
+    console.error('获取顶置历史失败:', error)
+  }
+}
+
+// 清除顶置历史
+async function handleClearHistory() {
+  try {
+    await ElMessageBox.confirm(
+      '确定要清除所有顶置历史记录吗？此操作不可恢复！',
+      '确认清除',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    
+    const result = await api.clearPromoteHistory()
+    if (result.success) {
+      promoteHistory.value = []
+      ElMessage.success('顶置历史已清除')
+    }
+  } catch (error) {
+    // 用户取消
   }
 }
 
@@ -321,6 +416,81 @@ onMounted(() => {
 
 .user-list {
   padding: 10px 0;
+}
+
+.promote-history-list {
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 10px 0;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background: rgba(102, 126, 234, 0.03);
+  transition: background 0.2s;
+}
+
+.history-item:hover {
+  background: rgba(102, 126, 234, 0.08);
+}
+
+.history-album {
+  width: 50px;
+  height: 50px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.history-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.history-song {
+  font-size: 15px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-artist {
+  font-size: 13px;
+  color: #999;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.history-user {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #409eff;
+  background: rgba(64, 158, 255, 0.1);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.history-time {
+  font-size: 12px;
+  color: #666;
+  font-weight: 500;
 }
 
 .placeholder {

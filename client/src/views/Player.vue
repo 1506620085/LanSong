@@ -131,23 +131,34 @@
                 </el-tag>
               </div>
               <div class="queue-artist">{{ song.artists }}</div>
+              <div v-if="song.requestedBy" class="queue-requester">
+                <el-icon><User /></el-icon>
+                {{ song.requestedBy }}
+              </div>
             </div>
             <div class="queue-duration">{{ formatDuration(song.duration) }}</div>
-            <el-button
-              v-if="!currentSong || currentSong.id !== song.id"
-              :icon="Top"
-              circle
-              size="small"
-              type="primary"
-              @click="promoteSong(song)"
-              title="顶置为下一首"
-            />
-            <el-button
-              :icon="Delete"
-              circle
-              size="small"
-              @click="removeSong(song.queueId)"
-            />
+            <div v-if="song.promotedBy" class="promoted-info">
+              <el-icon class="promoted-icon"><Top /></el-icon>
+              <span class="promoted-time">{{ formatRelativeTime(song.promotedAt) }}</span>
+              <span>{{ song.promotedBy }}</span>
+            </div>
+            <div class="queue-actions">
+              <el-button
+                v-if="!currentSong || currentSong.id !== song.id"
+                :icon="Top"
+                circle
+                size="small"
+                type="primary"
+                @click="promoteSong(song)"
+                title="顶置为下一首"
+              />
+              <el-button
+                :icon="Delete"
+                circle
+                size="small"
+                @click="removeSong(song.queueId)"
+              />
+            </div>
           </div>
         </div>
 
@@ -176,7 +187,7 @@ import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Headset, VideoPlay, VideoPause, DArrowLeft, DArrowRight,
-  List, Delete, Microphone, RefreshRight, Top
+  List, Delete, Microphone, RefreshRight, Top, User
 } from '@element-plus/icons-vue'
 import api from '../utils/api'
 import socket from '../utils/socket'
@@ -191,6 +202,20 @@ const currentTime = ref(0)
 const duration = ref(0)
 const volume = ref(80)
 const hasPrevious = ref(false)
+
+// 格式化相对时间
+const formatRelativeTime = (timeStr) => {
+  if (!timeStr) return ''
+  const now = new Date()
+  const time = new Date(timeStr)
+  const diff = Math.floor((now - time) / 1000) // 秒
+  
+  if (diff < 60) return '刚刚'
+  if (diff < 3600) return `${Math.floor(diff / 60)}分钟前`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}小时前`
+  if (diff < 2592000) return `${Math.floor(diff / 86400)}天前`
+  return time.toLocaleDateString('zh-CN')
+}
 
 // 顶置歌曲
 const promoteSong = async (song) => {
@@ -685,10 +710,50 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
+.queue-requester {
+  font-size: 12px;
+  color: #667eea;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+}
+
 .queue-duration {
   font-size: 13px;
   color: #999;
   margin-right: 10px;
+}
+
+.queue-actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.promoted-info {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #409eff;
+  background: rgba(64, 158, 255, 0.1);
+  padding: 4px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(64, 158, 255, 0.2);
+  white-space: nowrap;
+  margin-right: 8px;
+}
+
+.promoted-icon {
+  font-size: 11px;
+}
+
+.promoted-time {
+  font-size: 11px;
+  color: #666;
+  font-weight: 500;
 }
 
 .queue-empty {

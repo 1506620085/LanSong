@@ -131,5 +131,11 @@ export default {
   getAdminConfig() {
     return api.get('/api/admin/config')
   },
+  getPromoteHistory(limit = 50) {
+    return api.get('/api/admin/promote-history', { params: { limit } })
+  },
+  clearPromoteHistory() {
+    return api.post('/api/admin/clear-promote-history')
+  },
 }
 

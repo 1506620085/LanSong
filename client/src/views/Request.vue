@@ -77,6 +77,11 @@
               </div>
             </div>
             <div class="queue-duration">{{ formatDuration(song.duration) }}</div>
+            <div v-if="song.promotedBy" class="promoted-info">
+              <el-icon class="promoted-icon"><Top /></el-icon>
+              <span class="promoted-time">{{ formatRelativeTime(song.promotedAt) }}</span>
+              <span>{{ song.promotedBy }}</span>
+            </div>
             <el-button
               v-if="!currentSong || currentSong.id !== song.id"
               :icon="Top"
@@ -157,6 +162,20 @@ const pageSize = ref(30)
 const addingIds = ref([])
 const currentSong = ref(null)
 const queue = ref([])
+
+// 格式化相对时间
+const formatRelativeTime = (timeStr) => {
+  if (!timeStr) return ''
+  const now = new Date()
+  const time = new Date(timeStr)
+  const diff = Math.floor((now - time) / 1000) // 秒
+  
+  if (diff < 60) return '刚刚'
+  if (diff < 3600) return `${Math.floor(diff / 60)}分钟前`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}小时前`
+  if (diff < 2592000) return `${Math.floor(diff / 86400)}天前`
+  return time.toLocaleDateString('zh-CN')
+}
 
 // 本机用户信息（从 NavBar 同步）
 const localUserInfo = ref({
@@ -479,6 +498,31 @@ onUnmounted(() => {
 .queue-duration {
   font-size: 13px;
   color: #999;
+}
+
+.promoted-info {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #409eff;
+  background: rgba(64, 158, 255, 0.1);
+  padding: 4px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(64, 158, 255, 0.2);
+  white-space: nowrap;
+  margin-right: 8px;
+}
+
+.promoted-icon {
+  font-size: 11px;
+}
+
+.promoted-time {
+  font-size: 11px;
+  color: #666;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .search-results {

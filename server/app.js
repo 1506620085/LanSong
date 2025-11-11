@@ -152,6 +152,26 @@ app.get('/api/admin/config', requireHost, (req, res) => {
   });
 });
 
+// 获取顶置历史记录（仅主机）
+app.get('/api/admin/promote-history', requireHost, (req, res) => {
+  const limit = parseInt(req.query.limit) || 50;
+  const history = playQueue.getPromoteHistory(limit);
+  res.json({
+    success: true,
+    data: history,
+    total: history.length
+  });
+});
+
+// 清除顶置历史记录（仅主机）
+app.post('/api/admin/clear-promote-history', requireHost, (req, res) => {
+  playQueue.clearPromoteHistory();
+  res.json({
+    success: true,
+    message: '顶置历史已清除'
+  });
+});
+
 // ============ 认证相关 API ============
 
 // 生成二维码
@@ -345,7 +365,13 @@ app.post('/api/queue/promote', (req, res) => {
   if (!queueId) {
     return res.json({ success: false, error: '缺少 queueId' });
   }
-  const result = playQueue.promoteSong(parseFloat(queueId));
+  
+  // 获取顶置用户信息
+  const ip = getClientIP(req);
+  const user = ipManager.getUserByIP(ip);
+  const promotedBy = user?.username || ip;
+  
+  const result = playQueue.promoteSong(parseFloat(queueId), promotedBy);
   if (result.success) {
     io.emit('queue-updated', playQueue.getState());
   }

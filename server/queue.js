@@ -5,6 +5,7 @@ class PlayQueue {
     this.currentIndex = -1; // 当前播放的索引
     this.currentSong = null; // 当前播放的歌曲
     this.history = []; // 播放历史
+    this.promoteHistory = []; // 顶置历史记录
   }
 
   // 添加歌曲到队列
@@ -152,7 +153,7 @@ class PlayQueue {
   }
 
   // 顶置歌曲（将歌曲移动到下一首位置）
-  promoteSong(queueId) {
+  promoteSong(queueId, promotedBy) {
     const index = this.queue.findIndex(s => s.queueId === queueId);
     if (index === -1) {
       return { success: false, error: '歌曲不存在' };
@@ -164,6 +165,26 @@ class PlayQueue {
     }
 
     const [song] = this.queue.splice(index, 1);
+    
+    // 记录顶置用户和顶置时间
+    song.promotedBy = promotedBy;
+    song.promotedAt = new Date().toISOString();
+    
+    // 添加到顶置历史记录
+    this.promoteHistory.unshift({
+      songId: song.id,
+      songName: song.name,
+      artist: song.artists,
+      albumPic: song.albumPic,
+      promotedBy: promotedBy,
+      promotedAt: song.promotedAt,
+      queueId: song.queueId
+    });
+    
+    // 限制历史记录数量为100条
+    if (this.promoteHistory.length > 100) {
+      this.promoteHistory = this.promoteHistory.slice(0, 100);
+    }
 
     // 如果移除位置在当前索引之前，需要调整 currentIndex
     if (index < this.currentIndex) {
@@ -182,8 +203,19 @@ class PlayQueue {
       this.currentIndex++;
     }
 
-    console.log(`⇧ 顶置歌曲: ${song.name}`);
+    console.log(`⇧ 顶置歌曲: ${song.name} (by ${promotedBy})`);
     return { success: true, queue: this.queue };
+  }
+
+  // 获取顶置历史记录
+  getPromoteHistory(limit = 50) {
+    return this.promoteHistory.slice(0, limit);
+  }
+
+  // 清除顶置历史记录
+  clearPromoteHistory() {
+    this.promoteHistory = [];
+    console.log('✓ 顶置历史已清除');
   }
 }
 
