@@ -4,6 +4,7 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
 const musicApi = require('./api');
 const playQueue = require('./queue');
@@ -33,6 +34,23 @@ if (fs.existsSync(publicPath)) {
 }
 
 // 获取客户端真实IP地址
+// 获取服务器本机IP地址
+function getServerIP() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      // 跳过内部地址和非 IPv4 地址
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return '127.0.0.1'; // 默认返回本地地址
+}
+
+const SERVER_IP = getServerIP();
+console.log(`🖥️  服务器主机IP: ${SERVER_IP}`);
+
 function getClientIP(req) {
   // 优先从代理头获取
   const forwarded = req.headers['x-forwarded-for'];
@@ -52,6 +70,11 @@ function getClientIP(req) {
   return ip || 'unknown';
 }
 
+// 判断是否是主机
+function isHost(ip) {
+  return ip === SERVER_IP || ip === '127.0.0.1' || ip === 'localhost' || ip === '::1';
+}
+
 // ============ API 路由 ============
 
 // ============ IP用户管理 API ============
@@ -65,7 +88,8 @@ app.get('/api/user/info', (req, res) => {
     data: {
       ip: ip,
       username: user?.username || null,
-      hasUsername: !!user?.username
+      hasUsername: !!user?.username,
+      isHost: isHost(ip) // 添加主机标识
     }
   });
 });
@@ -92,7 +116,44 @@ app.get('/api/user/all', (req, res) => {
   });
 });
 
+// ============ 管理API ============
+
+// 中间件：验证是否是主机
+function requireHost(req, res, next) {
+  const ip = getClientIP(req);
+  if (!isHost(ip)) {
+    return res.status(403).json({
+      success: false,
+      error: '无权访问，仅主机可以访问管理功能'
+    });
+  }
+  next();
+}
+
+// 检查是否是主机
+app.get('/api/admin/check', (req, res) => {
+  const ip = getClientIP(req);
+  res.json({
+    success: true,
+    isHost: isHost(ip),
+    serverIP: SERVER_IP,
+    clientIP: ip
+  });
+});
+
+// 获取管理配置（仅主机）
+app.get('/api/admin/config', requireHost, (req, res) => {
+  // TODO: 后续添加配置管理
+  res.json({
+    success: true,
+    data: {
+      message: '管理配置功能待开发'
+    }
+  });
+});
+
 // ============ 认证相关 API ============
+
 // 生成二维码
 app.get('/api/auth/qr/new', async (req, res) => {
   try {
@@ -325,6 +386,8 @@ async function startServer() {
   console.log('\n========================================')
   console.log('🎵 局域网点歌系统启动中...')
   console.log('========================================\n')
+  console.log(`🖥️  主机IP地址: ${SERVER_IP}`);
+  console.log(`🔒 管理权限: 仅 ${SERVER_IP} 可以访问管理功能\n`)
 
   // 尝试加载保存的Cookie
   console.log('🔑 检查保存的登录状态...');

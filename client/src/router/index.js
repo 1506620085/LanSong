@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Request from '../views/Request.vue'
 import Player from '../views/Player.vue'
+import Admin from '../views/Admin.vue'
 
 const routes = [
   {
@@ -14,6 +15,12 @@ const routes = [
     name: 'Player',
     component: Player,
     meta: { title: '播放器' }
+  },
+  {
+    path: '/admin',
+    name: 'Admin',
+    component: Admin,
+    meta: { title: '管理设置' }
   }
 ]
 

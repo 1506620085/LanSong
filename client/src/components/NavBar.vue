@@ -13,15 +13,32 @@
       </div>
       <div class="right">
         <!-- 本机用户信息 -->
-        <div class="local-user-info">
-          <el-icon class="local-user-icon"><Monitor /></el-icon>
-          <div class="local-user-details">
-            <span class="local-user-ip">{{ localUserInfo.ip || '获取中...' }}</span>
-            <span class="local-user-name" @click="showUsernameDialog = true" :class="{ 'no-username': !localUserInfo.username }">
-              {{ localUserInfo.username || '点击设置用户名' }}
-            </span>
+        <el-dropdown trigger="hover">
+          <div class="local-user-info">
+            <el-icon class="local-user-icon"><Monitor /></el-icon>
+            <div class="local-user-details">
+              <span class="local-user-ip">
+                <span v-if="localUserInfo.isHost" class="host-badge">（主机）</span>
+                {{ localUserInfo.ip || '获取中...' }}
+              </span>
+              <span class="local-user-name" :class="{ 'no-username': !localUserInfo.username }">
+                {{ localUserInfo.username || '点击设置用户名' }}
+              </span>
+            </div>
           </div>
-        </div>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item @click="showUsernameDialog = true">
+                <el-icon><User /></el-icon>
+                设置用户名
+              </el-dropdown-item>
+              <el-dropdown-item v-if="localUserInfo.isHost" divided @click="openAdmin">
+                <el-icon><Setting /></el-icon>
+                管理设置
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
         
         <!-- 竖条分隔符 -->
         <div class="divider"></div>
@@ -87,19 +104,21 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
-import { Headset, User, Monitor, InfoFilled, ArrowDown } from '@element-plus/icons-vue'
+import { useRoute, useRouter } from 'vue-router'
+import { Headset, User, Monitor, InfoFilled, ArrowDown, Setting } from '@element-plus/icons-vue'
 import { authState, fetchAuthStatus, logout } from '../utils/auth'
 import api from '../utils/api'
 import { ElMessage } from 'element-plus'
 
 const route = useRoute()
+const router = useRouter()
 
 // 本机用户信息
 const localUserInfo = ref({
   ip: '',
   username: '',
-  hasUsername: false
+  hasUsername: false,
+  isHost: false
 })
 const showUsernameDialog = ref(false)
 const newUsername = ref('')
@@ -118,6 +137,11 @@ async function doLogout() {
   } catch (error) {
     ElMessage.error('退出失败')
   }
+}
+
+// 打开管理页面
+function openAdmin() {
+  router.push('/admin')
 }
 
 // 获取本机用户信息
@@ -252,9 +276,12 @@ onMounted(() => {
   background: rgba(102, 126, 234, 0.08);
   border-radius: 8px;
   transition: all 0.2s;
+  cursor: pointer;
 }
 .local-user-info:hover {
-  background: rgba(102, 126, 234, 0.12);
+  background: rgba(102, 126, 234, 0.15);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
 }
 .local-user-icon {
   font-size: 20px;
@@ -269,17 +296,25 @@ onMounted(() => {
   font-size: 11px;
   color: #666;
   line-height: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.host-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  color: #ff6b6b;
+  background: linear-gradient(135deg, #fff5f5 0%, #ffe9e9 100%);
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid #ffcdd2;
 }
 .local-user-name {
   font-size: 13px;
   color: #333;
   font-weight: 600;
-  cursor: pointer;
-  transition: color 0.2s;
   line-height: 1.2;
-}
-.local-user-name:hover {
-  color: #667eea;
 }
 .local-user-name.no-username {
   color: #ff6b6b;

@@ -123,5 +123,13 @@ export default {
   getAllUsers() {
     return api.get('/api/user/all')
   },
+
+  // 管理相关
+  checkAdminPermission() {
+    return api.get('/api/admin/check')
+  },
+  getAdminConfig() {
+    return api.get('/api/admin/config')
+  },
 }
 
