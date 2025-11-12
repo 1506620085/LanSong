@@ -444,15 +444,61 @@ app.delete('/api/queue/:queueId', (req, res) => {
 
 // 播放下一首
 app.post('/api/queue/next', (req, res) => {
+  // 获取用户信息
+  const ip = getClientIP(req);
+  const hostCheck = isHost(ip);
+  
+  // 如果不是主机，需要检查切歌限额
+  if (!hostCheck) {
+    const user = ipManager.getUserByIP(ip);
+    
+    // 验证用户是否已设置用户名
+    if (!ipManager.hasUsername(ip)) {
+      return res.json({ 
+        success: false, 
+        error: '请先设置用户名后再进行切歌操作',
+        needSetUsername: true 
+      });
+    }
+    
+    // 检查切歌限额
+    const quotaCheck = quotaManager.checkOperationQuota(ip, 'skip', false);
+    if (!quotaCheck.allowed) {
+      return res.json({
+        success: false,
+        error: quotaCheck.error,
+        quotaExceeded: true,
+        waitTime: quotaCheck.waitTime,
+        current: quotaCheck.current,
+        max: quotaCheck.max,
+        timeWindow: quotaCheck.timeWindow,
+        operationType: 'skip'
+      });
+    }
+    
+    // 记录切歌操作
+    quotaManager.recordOperation(ip, 'skip', { 
+      skippedBy: user.username,
+      timestamp: new Date().toISOString(),
+      action: 'next'
+    });
+  }
+  
   const nextSong = playQueue.playNext();
   
   // 广播播放状态更新
   io.emit('play-next', {
     currentSong: nextSong,
-    queue: playQueue.getQueue()
+    queue: playQueue.getQueue(),
+    skipped: !hostCheck,
+    skippedBy: hostCheck ? null : ipManager.getUserByIP(ip)?.username
   });
   
-  res.json({ success: true, data: nextSong });
+  res.json({ 
+    success: true, 
+    data: nextSong,
+    message: hostCheck ? null : `${ipManager.getUserByIP(ip)?.username} 切换了歌曲`
+  });
 });
 
 // 切歌（跳过当前歌曲）
@@ -512,15 +558,61 @@ app.post('/api/queue/skip', (req, res) => {
 
 // 播放上一首
 app.post('/api/queue/previous', (req, res) => {
+  // 获取用户信息
+  const ip = getClientIP(req);
+  const hostCheck = isHost(ip);
+  
+  // 如果不是主机，需要检查切歌限额
+  if (!hostCheck) {
+    const user = ipManager.getUserByIP(ip);
+    
+    // 验证用户是否已设置用户名
+    if (!ipManager.hasUsername(ip)) {
+      return res.json({ 
+        success: false, 
+        error: '请先设置用户名后再进行切歌操作',
+        needSetUsername: true 
+      });
+    }
+    
+    // 检查切歌限额
+    const quotaCheck = quotaManager.checkOperationQuota(ip, 'skip', false);
+    if (!quotaCheck.allowed) {
+      return res.json({
+        success: false,
+        error: quotaCheck.error,
+        quotaExceeded: true,
+        waitTime: quotaCheck.waitTime,
+        current: quotaCheck.current,
+        max: quotaCheck.max,
+        timeWindow: quotaCheck.timeWindow,
+        operationType: 'skip'
+      });
+    }
+    
+    // 记录切歌操作
+    quotaManager.recordOperation(ip, 'skip', { 
+      skippedBy: user.username,
+      timestamp: new Date().toISOString(),
+      action: 'previous'
+    });
+  }
+  
   const prevSong = playQueue.playPrevious();
   
   // 广播播放状态更新
   io.emit('play-previous', {
     currentSong: prevSong,
-    queue: playQueue.getQueue()
+    queue: playQueue.getQueue(),
+    skipped: !hostCheck,
+    skippedBy: hostCheck ? null : ipManager.getUserByIP(ip)?.username
   });
   
-  res.json({ success: true, data: prevSong });
+  res.json({ 
+    success: true, 
+    data: prevSong,
+    message: hostCheck ? null : `${ipManager.getUserByIP(ip)?.username} 切换了歌曲`
+  });
 });
 
 // 清空队列

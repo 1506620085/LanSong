@@ -74,16 +74,6 @@
               @click="playNext"
               :disabled="queue.length === 0"
             />
-            <el-button
-              :icon="RefreshRight"
-              circle
-              size="large"
-              type="warning"
-              @click="handleSkip"
-              :disabled="!currentSong"
-              title="切歌"
-              class="skip-button"
-            />
           </div>
 
           <!-- 音量控制 -->
@@ -343,36 +333,10 @@ const togglePlay = async () => {
 const playNext = async () => {
   try {
     const result = await api.playNext()
-    if (result.success && result.data) {
-      await playSong(result.data)
-    } else {
-      // 队列已结束，完全停止播放
-      ElMessage.info('播放列表已结束')
-      stopPlayback()
-    }
-  } catch (error) {
-    ElMessage.error('切歌失败')
-  }
-}
-
-// 播放上一首
-const playPrevious = async () => {
-  try {
-    const result = await api.playPrevious()
-    if (result.success && result.data) {
-      await playSong(result.data)
-    }
-  } catch (error) {
-    ElMessage.error('返回上一首失败')
-  }
-}
-
-// 切歌
-const handleSkip = async () => {
-  try {
-    const result = await api.skipSong()
     if (result.success) {
-      ElMessage.success(result.message || '已切歌')
+      if (result.message) {
+        ElMessage.success(result.message)
+      }
       if (result.data) {
         await playSong(result.data)
       } else {
@@ -394,6 +358,35 @@ const handleSkip = async () => {
     ElMessage.error('切歌失败')
   }
 }
+
+// 播放上一首
+const playPrevious = async () => {
+  try {
+    const result = await api.playPrevious()
+    if (result.success) {
+      if (result.message) {
+        ElMessage.success(result.message)
+      }
+      if (result.data) {
+        await playSong(result.data)
+      } else {
+        ElMessage.error('没有上一首歌曲')
+      }
+    } else {
+      if (result.needSetUsername) {
+        ElMessage.error('请先设置用户名后再进行切歌操作')
+      } else if (result.quotaExceeded) {
+        ElMessage.error(result.error)
+      } else {
+        ElMessage.error(result.error || '返回上一首失败')
+      }
+    }
+  } catch (error) {
+    console.error('返回上一首失败:', error)
+    ElMessage.error('返回上一首失败')
+  }
+}
+
 
 // 删除歌曲
 const removeSong = async (queueId) => {
