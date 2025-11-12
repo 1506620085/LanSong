@@ -244,9 +244,17 @@ const loadQueue = async () => {
   try {
     const result = await api.getQueue()
     if (result.success) {
+      const wasEmpty = !currentSong.value && queue.value.length === 0
+      
       currentSong.value = result.data.currentSong
       queue.value = result.data.queue || []
       hasPrevious.value = result.data.historyLength > 0
+      
+      // 如果之前是空的，现在有歌曲且没有当前播放歌曲，自动播放第一首
+      if (wasEmpty && !result.data.currentSong && result.data.queue && result.data.queue.length > 0) {
+        console.log('初始加载自动播放：队列有歌曲但没有当前播放')
+        playNext()
+      }
     }
   } catch (error) {
     console.error('加载队列失败:', error)
@@ -262,28 +270,62 @@ const playSong = async (song) => {
     if (result.success && result.url) {
       audioRef.value.src = result.url
       audioRef.value.load()
-      audioRef.value.play()
-      currentSong.value = song
-      ElMessage.success(`正在播放: ${song.name}`)
+      
+      // 尝试播放，处理可能的播放失败
+      try {
+        await audioRef.value.play()
+        currentSong.value = song
+        isPlaying.value = true
+        ElMessage.success(`正在播放: ${song.name}`)
+      } catch (playError) {
+        console.error('播放失败:', playError)
+        ElMessage.error('播放失败，可能需要用户交互后才能播放')
+        // 设置歌曲但不自动播放，等待用户手动点击
+        currentSong.value = song
+        isPlaying.value = false
+      }
     } else {
       ElMessage.error('获取播放链接失败')
       // 自动跳到下一首
       setTimeout(() => playNext(), 1000)
     }
   } catch (error) {
+    console.error('获取播放链接失败:', error)
     ElMessage.error('播放失败')
     setTimeout(() => playNext(), 1000)
   }
 }
 
+// 完全停止播放
+const stopPlayback = () => {
+  if (audioRef.value) {
+    audioRef.value.pause()
+    audioRef.value.currentTime = 0
+    audioRef.value.src = ''
+    // 移除所有事件监听器，确保不会有残留的播放事件
+    audioRef.value.removeAttribute('src')
+    audioRef.value.load()
+  }
+  currentSong.value = null
+  isPlaying.value = false
+  currentTime.value = 0
+  duration.value = 0
+  console.log('播放已完全停止')
+}
+
 // 切换播放/暂停
-const togglePlay = () => {
+const togglePlay = async () => {
   if (!audioRef.value || !currentSong.value) return
 
   if (isPlaying.value) {
     audioRef.value.pause()
   } else {
-    audioRef.value.play()
+    try {
+      await audioRef.value.play()
+    } catch (error) {
+      console.error('播放失败:', error)
+      ElMessage.error('播放失败，请检查音频文件')
+    }
   }
 }
 
@@ -294,9 +336,9 @@ const playNext = async () => {
     if (result.success && result.data) {
       await playSong(result.data)
     } else {
+      // 队列已结束，完全停止播放
       ElMessage.info('播放列表已结束')
-      currentSong.value = null
-      isPlaying.value = false
+      stopPlayback()
     }
   } catch (error) {
     ElMessage.error('切歌失败')
@@ -373,6 +415,14 @@ const handleSongEnd = () => {
 const handleLoadedMetadata = () => {
   if (audioRef.value) {
     duration.value = audioRef.value.duration
+    
+    // 如果当前有歌曲但没有播放，尝试自动播放
+    if (currentSong.value && !isPlaying.value) {
+      console.log('音频元数据加载完成，尝试自动播放')
+      audioRef.value.play().catch(error => {
+        console.log('自动播放被阻止，等待用户交互:', error)
+      })
+    }
   }
 }
 
@@ -385,11 +435,36 @@ const handleError = (e) => {
 
 // WebSocket 事件处理
 const handleQueueUpdate = (state) => {
+  const oldCurrentSong = currentSong.value
+  const oldQueueLength = queue.value.length
+  
   queue.value = state.queue || []
   hasPrevious.value = state.historyLength > 0
+  
+  // 更新当前歌曲
+  if (state.currentSong) {
+    currentSong.value = state.currentSong
+  } else if (!state.currentSong && state.queue && state.queue.length === 0) {
+    // 队列为空且没有当前歌曲，完全停止播放
+    console.log('队列更新：队列为空，停止播放')
+    stopPlayback()
+    return
+  }
 
-  // 如果当前没有播放且队列有歌曲，自动播放第一首
-  if (!currentSong.value && state.queue && state.queue.length > 0) {
+  // 自动播放逻辑：
+  // 1. 之前没有歌曲正在播放
+  // 2. 现在有歌曲在队列中
+  // 3. 队列从空变为有歌曲（新添加了歌曲）
+  const shouldAutoPlay = (
+    !oldCurrentSong && // 之前没有当前歌曲
+    !isPlaying.value && // 当前没有播放
+    state.queue && 
+    state.queue.length > 0 && // 现在队列有歌曲
+    oldQueueLength === 0 // 之前队列是空的
+  )
+  
+  if (shouldAutoPlay) {
+    console.log('自动播放触发：队列从空变为有歌曲')
     playNext()
   }
 }
@@ -399,8 +474,8 @@ const handlePlayNext = (data) => {
   if (data.currentSong) {
     playSong(data.currentSong)
   } else {
-    currentSong.value = null
-    isPlaying.value = false
+    // 没有歌曲时完全停止播放
+    stopPlayback()
   }
 }
 
@@ -412,10 +487,22 @@ const handlePlayPrevious = (data) => {
 }
 
 // 监听当前歌曲变化
-watch(currentSong, (newSong) => {
+watch(currentSong, (newSong, oldSong) => {
   if (newSong) {
     // 更新浏览器标题
     document.title = `${newSong.name} - ${newSong.artists}`
+    
+    // 如果歌曲变化了且之前没有歌曲，尝试自动播放
+    if (!oldSong && !isPlaying.value && audioRef.value && audioRef.value.src) {
+      console.log('歌曲变化触发自动播放检查')
+      setTimeout(() => {
+        if (!isPlaying.value && audioRef.value && audioRef.value.src) {
+          audioRef.value.play().catch(error => {
+            console.log('自动播放被阻止，等待用户交互:', error)
+          })
+        }
+      }, 500) // 延迟500ms确保音频已加载
+    }
   } else {
     document.title = '播放器 - 局域网点歌系统'
   }
