@@ -74,6 +74,16 @@
               @click="playNext"
               :disabled="queue.length === 0"
             />
+            <el-button
+              :icon="RefreshRight"
+              circle
+              size="large"
+              type="warning"
+              @click="handleSkip"
+              :disabled="!currentSong"
+              title="切歌"
+              class="skip-button"
+            />
           </div>
 
           <!-- 音量控制 -->
@@ -354,6 +364,34 @@ const playPrevious = async () => {
     }
   } catch (error) {
     ElMessage.error('返回上一首失败')
+  }
+}
+
+// 切歌
+const handleSkip = async () => {
+  try {
+    const result = await api.skipSong()
+    if (result.success) {
+      ElMessage.success(result.message || '已切歌')
+      if (result.data) {
+        await playSong(result.data)
+      } else {
+        // 队列已结束，完全停止播放
+        ElMessage.info('播放列表已结束')
+        stopPlayback()
+      }
+    } else {
+      if (result.needSetUsername) {
+        ElMessage.error('请先设置用户名后再进行切歌操作')
+      } else if (result.quotaExceeded) {
+        ElMessage.error(result.error)
+      } else {
+        ElMessage.error(result.error || '切歌失败')
+      }
+    }
+  } catch (error) {
+    console.error('切歌失败:', error)
+    ElMessage.error('切歌失败')
   }
 }
 

@@ -146,57 +146,146 @@
         <!-- 操作限额对话框 -->
         <el-dialog
           v-model="quotaDialogVisible"
-          title="点歌限额配置"
-          width="500px"
+          title="操作限额配置"
+          width="700px"
           :close-on-click-modal="false"
         >
-          <el-form :model="quotaForm" label-width="120px">
-            <el-alert
-              title="说明"
-              type="info"
-              :closable="false"
-              style="margin-bottom: 20px;"
-            >
-              服务主机不受限制，局域网其他机器严格遵守此配置
-            </el-alert>
+          <el-alert
+            title="说明"
+            type="info"
+            :closable="false"
+            style="margin-bottom: 20px;"
+          >
+            服务主机不受限制，局域网其他机器严格遵守此配置
+          </el-alert>
+          
+          <el-tabs v-model="activeQuotaTab" type="card">
+            <!-- 点歌限额 -->
+            <el-tab-pane label="点歌限额" name="song">
+              <el-form :model="quotaForms.song" label-width="120px">
+                <el-form-item label="时间窗口">
+                  <el-input-number
+                    v-model="quotaForms.song.timeWindow"
+                    :min="10"
+                    :max="3600"
+                    :step="10"
+                    style="width: 100%;"
+                  />
+                  <span style="margin-left: 10px; color: #999;">秒</span>
+                  <div style="font-size: 12px; color: #999; margin-top: 5px;">
+                    范围：10-3600秒（{{ Math.floor(quotaForms.song.timeWindow / 60) }}分钟）
+                  </div>
+                </el-form-item>
+                
+                <el-form-item label="最大操作数">
+                  <el-input-number
+                    v-model="quotaForms.song.maxOperations"
+                    :min="1"
+                    :max="100"
+                    :step="1"
+                    style="width: 100%;"
+                  />
+                  <span style="margin-left: 10px; color: #999;">首</span>
+                  <div style="font-size: 12px; color: #999; margin-top: 5px;">
+                    范围：1-100首
+                  </div>
+                </el-form-item>
+                
+                <el-form-item>
+                  <div class="quota-preview">
+                    <el-icon style="color: #409eff; margin-right: 8px;"><InfoFilled /></el-icon>
+                    <span>
+                      当前配置：每 <strong>{{ quotaForms.song.timeWindow }}秒</strong> 内最多点 <strong>{{ quotaForms.song.maxOperations }}首</strong> 歌
+                    </span>
+                  </div>
+                </el-form-item>
+              </el-form>
+            </el-tab-pane>
             
-            <el-form-item label="时间窗口">
-              <el-input-number
-                v-model="quotaForm.timeWindow"
-                :min="10"
-                :max="3600"
-                :step="10"
-                style="width: 100%;"
-              />
-              <span style="margin-left: 10px; color: #999;">秒</span>
-              <div style="font-size: 12px; color: #999; margin-top: 5px;">
-                范围：10-3600秒（{{ Math.floor(quotaForm.timeWindow / 60) }}分钟）
-              </div>
-            </el-form-item>
+            <!-- 切歌限额 -->
+            <el-tab-pane label="切歌限额" name="skip">
+              <el-form :model="quotaForms.skip" label-width="120px">
+                <el-form-item label="时间窗口">
+                  <el-input-number
+                    v-model="quotaForms.skip.timeWindow"
+                    :min="10"
+                    :max="3600"
+                    :step="10"
+                    style="width: 100%;"
+                  />
+                  <span style="margin-left: 10px; color: #999;">秒</span>
+                  <div style="font-size: 12px; color: #999; margin-top: 5px;">
+                    范围：10-3600秒（{{ Math.floor(quotaForms.skip.timeWindow / 60) }}分钟）
+                  </div>
+                </el-form-item>
+                
+                <el-form-item label="最大操作数">
+                  <el-input-number
+                    v-model="quotaForms.skip.maxOperations"
+                    :min="1"
+                    :max="100"
+                    :step="1"
+                    style="width: 100%;"
+                  />
+                  <span style="margin-left: 10px; color: #999;">次</span>
+                  <div style="font-size: 12px; color: #999; margin-top: 5px;">
+                    范围：1-100次
+                  </div>
+                </el-form-item>
+                
+                <el-form-item>
+                  <div class="quota-preview">
+                    <el-icon style="color: #f56c6c; margin-right: 8px;"><InfoFilled /></el-icon>
+                    <span>
+                      当前配置：每 <strong>{{ quotaForms.skip.timeWindow }}秒</strong> 内最多切歌 <strong>{{ quotaForms.skip.maxOperations }}次</strong>
+                    </span>
+                  </div>
+                </el-form-item>
+              </el-form>
+            </el-tab-pane>
             
-            <el-form-item label="最大歌曲数">
-              <el-input-number
-                v-model="quotaForm.maxSongs"
-                :min="1"
-                :max="100"
-                :step="1"
-                style="width: 100%;"
-              />
-              <span style="margin-left: 10px; color: #999;">首</span>
-              <div style="font-size: 12px; color: #999; margin-top: 5px;">
-                范围：1-100首
-              </div>
-            </el-form-item>
-            
-            <el-form-item>
-              <div class="quota-preview">
-                <el-icon style="color: #409eff; margin-right: 8px;"><InfoFilled /></el-icon>
-                <span>
-                  当前配置：每 <strong>{{ quotaForm.timeWindow }}秒</strong> 内最多点 <strong>{{ quotaForm.maxSongs }}首</strong> 歌
-                </span>
-              </div>
-            </el-form-item>
-          </el-form>
+            <!-- 顶置限额 -->
+            <el-tab-pane label="顶置限额" name="promote">
+              <el-form :model="quotaForms.promote" label-width="120px">
+                <el-form-item label="时间窗口">
+                  <el-input-number
+                    v-model="quotaForms.promote.timeWindow"
+                    :min="10"
+                    :max="3600"
+                    :step="10"
+                    style="width: 100%;"
+                  />
+                  <span style="margin-left: 10px; color: #999;">秒</span>
+                  <div style="font-size: 12px; color: #999; margin-top: 5px;">
+                    范围：10-3600秒（{{ Math.floor(quotaForms.promote.timeWindow / 60) }}分钟）
+                  </div>
+                </el-form-item>
+                
+                <el-form-item label="最大操作数">
+                  <el-input-number
+                    v-model="quotaForms.promote.maxOperations"
+                    :min="1"
+                    :max="100"
+                    :step="1"
+                    style="width: 100%;"
+                  />
+                  <span style="margin-left: 10px; color: #999;">次</span>
+                  <div style="font-size: 12px; color: #999; margin-top: 5px;">
+                    范围：1-100次
+                  </div>
+                </el-form-item>
+                
+                <el-form-item>
+                  <div class="quota-preview">
+                    <el-icon style="color: #e6a23c; margin-right: 8px;"><InfoFilled /></el-icon>
+                    <span>
+                      当前配置：每 <strong>{{ quotaForms.promote.timeWindow }}秒</strong> 内最多顶置 <strong>{{ quotaForms.promote.maxOperations }}次</strong>
+                    </span>
+                  </div>
+                </el-form-item>
+              </el-form>
+            </el-tab-pane>
+          </el-tabs>
           
           <template #footer>
             <el-button @click="quotaDialogVisible = false">取消</el-button>
@@ -242,9 +331,20 @@ const quotaDialogVisible = ref(false)
 const quotaSaving = ref(false)
 
 // 限额配置表单
-const quotaForm = ref({
-  timeWindow: 60,
-  maxSongs: 3
+const activeQuotaTab = ref('song')
+const quotaForms = ref({
+  song: {
+    timeWindow: 60,
+    maxOperations: 3
+  },
+  skip: {
+    timeWindow: 300,
+    maxOperations: 2
+  },
+  promote: {
+    timeWindow: 120,
+    maxOperations: 1
+  }
 })
 
 // 应用列表
@@ -414,7 +514,24 @@ async function fetchQuotaConfig() {
   try {
     const result = await api.getQuotaConfig()
     if (result.success && result.data) {
-      quotaForm.value = { ...result.data }
+      // 适配新的数据结构
+      if (result.data.song) {
+        quotaForms.value.song = { ...result.data.song }
+      }
+      if (result.data.skip) {
+        quotaForms.value.skip = { ...result.data.skip }
+      }
+      if (result.data.promote) {
+        quotaForms.value.promote = { ...result.data.promote }
+      }
+      
+      // 兼容旧格式
+      if (result.data.timeWindow && result.data.maxSongs) {
+        quotaForms.value.song = {
+          timeWindow: result.data.timeWindow,
+          maxOperations: result.data.maxSongs
+        }
+      }
     }
   } catch (error) {
     console.error('获取限额配置失败:', error)
@@ -424,26 +541,48 @@ async function fetchQuotaConfig() {
 
 // 保存限额配置
 async function handleSaveQuota() {
-  if (quotaForm.value.timeWindow < 10 || quotaForm.value.timeWindow > 3600) {
+  const currentForm = quotaForms.value[activeQuotaTab.value]
+  
+  // 验证当前标签页的配置
+  if (currentForm.timeWindow < 10 || currentForm.timeWindow > 3600) {
     ElMessage.error('时间窗口必须在10-3600秒之间')
     return
   }
   
-  if (quotaForm.value.maxSongs < 1 || quotaForm.value.maxSongs > 100) {
-    ElMessage.error('歌曲数量必须在1-100首之间')
+  if (currentForm.maxOperations < 1 || currentForm.maxOperations > 100) {
+    ElMessage.error('操作数量必须在1-100次之间')
     return
   }
   
   quotaSaving.value = true
   try {
-    const result = await api.updateQuotaConfig(
-      quotaForm.value.timeWindow,
-      quotaForm.value.maxSongs
-    )
+    let result
+    
+    if (activeQuotaTab.value === 'song') {
+      // 保持向后兼容，使用旧API
+      result = await api.updateQuotaConfig(
+        currentForm.timeWindow,
+        currentForm.maxOperations
+      )
+    } else {
+      // 使用新API
+      result = await api.updateOperationQuotaConfig(
+        activeQuotaTab.value,
+        currentForm.timeWindow,
+        currentForm.maxOperations
+      )
+    }
     
     if (result.success) {
-      ElMessage.success('限额配置已更新')
-      quotaDialogVisible.value = false
+      const operationNames = {
+        song: '点歌',
+        skip: '切歌',
+        promote: '顶置'
+      }
+      ElMessage.success(`${operationNames[activeQuotaTab.value]}限额配置已更新`)
+      
+      // 如果保存成功，可以选择关闭对话框或切换到下一个标签页
+      // quotaDialogVisible.value = false
     } else {
       ElMessage.error(result.error || '更新失败')
     }

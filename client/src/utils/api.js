@@ -79,6 +79,11 @@ export default {
     return api.post('/api/queue/next')
   },
 
+  // 切歌
+  skipSong() {
+    return api.post('/api/queue/skip')
+  },
+
   // 播放上一首
   playPrevious() {
     return api.post('/api/queue/previous')
@@ -144,8 +149,15 @@ export default {
   updateQuotaConfig(timeWindow, maxSongs) {
     return api.post('/api/admin/quota-config', { timeWindow, maxSongs })
   },
+  // 操作限额配置
+  updateOperationQuotaConfig(operationType, timeWindow, maxOperations) {
+    return api.post('/api/admin/operation-quota-config', { operationType, timeWindow, maxOperations })
+  },
   getQuotaStatus() {
     return api.get('/api/quota/status')
+  },
+  getAllQuotaStatus() {
+    return api.get('/api/quota/all-status')
   },
 }
 

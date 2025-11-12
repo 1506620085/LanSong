@@ -182,7 +182,7 @@ app.get('/api/admin/quota-config', requireHost, (req, res) => {
   });
 });
 
-// 更新限额配置（仅主机）
+// 更新限额配置（仅主机）- 保持向后兼容
 app.post('/api/admin/quota-config', requireHost, (req, res) => {
   const { timeWindow, maxSongs } = req.body;
   
@@ -210,8 +210,66 @@ app.post('/api/admin/quota-config', requireHost, (req, res) => {
   const result = quotaManager.updateConfig(timeWindow, maxSongs);
   res.json({
     success: true,
-    message: '限额配置已更新',
+    message: '点歌限额配置已更新',
     data: quotaManager.getConfig()
+  });
+});
+
+// 更新操作限额配置（仅主机）
+app.post('/api/admin/operation-quota-config', requireHost, (req, res) => {
+  const { operationType, timeWindow, maxOperations } = req.body;
+  
+  if (!operationType || !timeWindow || !maxOperations) {
+    return res.json({
+      success: false,
+      error: '参数不完整'
+    });
+  }
+  
+  // 验证操作类型
+  const validTypes = ['song', 'skip', 'promote'];
+  if (!validTypes.includes(operationType)) {
+    return res.json({
+      success: false,
+      error: '无效的操作类型'
+    });
+  }
+  
+  // 验证参数范围
+  if (timeWindow < 10 || timeWindow > 3600) {
+    return res.json({
+      success: false,
+      error: '时间窗口必须在10-3600秒之间'
+    });
+  }
+  
+  if (maxOperations < 1 || maxOperations > 100) {
+    return res.json({
+      success: false,
+      error: '操作数量必须在1-100次之间'
+    });
+  }
+  
+  const result = quotaManager.updateOperationConfig(operationType, timeWindow, maxOperations);
+  if (result.success) {
+    res.json({
+      success: true,
+      message: `${operationType === 'song' ? '点歌' : operationType === 'skip' ? '切歌' : '顶置'}限额配置已更新`,
+      data: quotaManager.getConfig()
+    });
+  } else {
+    res.json(result);
+  }
+});
+
+// 获取所有操作限额状态
+app.get('/api/quota/all-status', (req, res) => {
+  const ip = getClientIP(req);
+  const hostCheck = isHost(ip);
+  const status = quotaManager.getAllOperationStatus(ip, hostCheck);
+  res.json({
+    success: true,
+    data: status
   });
 });
 
@@ -397,6 +455,61 @@ app.post('/api/queue/next', (req, res) => {
   res.json({ success: true, data: nextSong });
 });
 
+// 切歌（跳过当前歌曲）
+app.post('/api/queue/skip', (req, res) => {
+  // 获取用户信息
+  const ip = getClientIP(req);
+  const user = ipManager.getUserByIP(ip);
+  
+  // 验证用户是否已设置用户名
+  if (!ipManager.hasUsername(ip)) {
+    return res.json({ 
+      success: false, 
+      error: '请先设置用户名后再进行切歌操作',
+      needSetUsername: true 
+    });
+  }
+  
+  // 检查切歌限额（主机不受限制）
+  const hostCheck = isHost(ip);
+  const quotaCheck = quotaManager.checkOperationQuota(ip, 'skip', hostCheck);
+  if (!quotaCheck.allowed) {
+    return res.json({
+      success: false,
+      error: quotaCheck.error,
+      quotaExceeded: true,
+      waitTime: quotaCheck.waitTime,
+      current: quotaCheck.current,
+      max: quotaCheck.max,
+      timeWindow: quotaCheck.timeWindow,
+      operationType: 'skip'
+    });
+  }
+  
+  // 执行切歌操作
+  const nextSong = playQueue.playNext();
+  
+  // 记录切歌操作
+  quotaManager.recordOperation(ip, 'skip', { 
+    skippedBy: user.username,
+    timestamp: new Date().toISOString()
+  });
+  
+  // 广播播放状态更新
+  io.emit('play-next', {
+    currentSong: nextSong,
+    queue: playQueue.getQueue(),
+    skipped: true,
+    skippedBy: user.username
+  });
+  
+  res.json({ 
+    success: true, 
+    data: nextSong,
+    message: `${user.username} 切换了歌曲`
+  });
+});
+
 // 播放上一首
 app.post('/api/queue/previous', (req, res) => {
   const prevSong = playQueue.playPrevious();
@@ -440,15 +553,44 @@ app.post('/api/queue/promote', (req, res) => {
     return res.json({ success: false, error: '缺少 queueId' });
   }
   
-  // 获取顶置用户信息
+  // 获取用户信息
   const ip = getClientIP(req);
   const user = ipManager.getUserByIP(ip);
-  const promotedBy = user?.username || ip;
   
+  // 验证用户是否已设置用户名
+  if (!ipManager.hasUsername(ip)) {
+    return res.json({ 
+      success: false, 
+      error: '请先设置用户名后再进行顶置操作',
+      needSetUsername: true 
+    });
+  }
+  
+  // 检查顶置限额（主机不受限制）
+  const hostCheck = isHost(ip);
+  const quotaCheck = quotaManager.checkOperationQuota(ip, 'promote', hostCheck);
+  if (!quotaCheck.allowed) {
+    return res.json({
+      success: false,
+      error: quotaCheck.error,
+      quotaExceeded: true,
+      waitTime: quotaCheck.waitTime,
+      current: quotaCheck.current,
+      max: quotaCheck.max,
+      timeWindow: quotaCheck.timeWindow,
+      operationType: 'promote'
+    });
+  }
+  
+  const promotedBy = user.username;
   const result = playQueue.promoteSong(parseFloat(queueId), promotedBy);
+  
+  // 记录顶置操作
   if (result.success) {
+    quotaManager.recordOperation(ip, 'promote', { queueId });
     io.emit('queue-updated', playQueue.getState());
   }
+  
   res.json(result);
 });
 
