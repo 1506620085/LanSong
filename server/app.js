@@ -10,6 +10,7 @@ const musicApi = require('./api');
 const playQueue = require('./queue');
 const ipManager = require('./ip-manager');
 const quotaManager = require('./quota-manager');
+const crypto = require('crypto');
 
 // 读取配置文件
 const config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf-8'));
@@ -51,6 +52,36 @@ function getServerIP() {
 
 const SERVER_IP = getServerIP();
 console.log(`🖥️  服务器主机IP: ${SERVER_IP}`);
+
+// 管理员会话存储 { token: { ip, expireAt } }
+const adminSessions = new Map();
+
+// 生成随机token
+function generateToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+// 验证管理员会话
+function verifyAdminSession(token) {
+  if (!token) return false;
+  const session = adminSessions.get(token);
+  if (!session) return false;
+  if (Date.now() > session.expireAt) {
+    adminSessions.delete(token);
+    return false;
+  }
+  return true;
+}
+
+// 清理过期会话（每小时执行一次）
+setInterval(() => {
+  const now = Date.now();
+  for (const [token, session] of adminSessions.entries()) {
+    if (now > session.expireAt) {
+      adminSessions.delete(token);
+    }
+  }
+}, 3600000);
 
 function getClientIP(req) {
   // 优先从代理头获取
@@ -119,31 +150,97 @@ app.get('/api/user/all', (req, res) => {
 
 // ============ 管理API ============
 
-// 中间件：验证是否是主机
-function requireHost(req, res, next) {
+// 中间件：验证是否是主机或有效会话
+function requireAdmin(req, res, next) {
   const ip = getClientIP(req);
-  if (!isHost(ip)) {
-    return res.status(403).json({
-      success: false,
-      error: '无权访问，仅主机可以访问管理功能'
-    });
+  const token = req.headers['x-admin-token'];
+  
+  // 主机直接通过
+  if (isHost(ip)) {
+    return next();
   }
-  next();
+  
+  // 验证token
+  if (verifyAdminSession(token)) {
+    return next();
+  }
+  
+  return res.status(403).json({
+    success: false,
+    error: '无权访问，需要管理员权限'
+  });
 }
 
-// 检查是否是主机
+// 检查管理权限
 app.get('/api/admin/check', (req, res) => {
   const ip = getClientIP(req);
+  const token = req.headers['x-admin-token'];
+  const hostCheck = isHost(ip);
+  const hasValidSession = verifyAdminSession(token);
+  
   res.json({
     success: true,
-    isHost: isHost(ip),
+    isHost: hostCheck,
+    hasAdminAccess: hostCheck || hasValidSession,
     serverIP: SERVER_IP,
     clientIP: ip
   });
 });
 
-// 获取管理配置（仅主机）
-app.get('/api/admin/config', requireHost, (req, res) => {
+// 验证管理密码
+app.post('/api/admin/verify-password', (req, res) => {
+  const { password } = req.body;
+  const ip = getClientIP(req);
+  
+  // 主机不需要密码
+  if (isHost(ip)) {
+    return res.json({
+      success: true,
+      message: '主机用户无需密码'
+    });
+  }
+  
+  // 检查配置文件中的密码
+  const adminPassword = config.adminPassword || 'admin123';
+  
+  if (password === adminPassword) {
+    // 生成token，有效期24小时
+    const token = generateToken();
+    const expireAt = Date.now() + 24 * 60 * 60 * 1000;
+    
+    adminSessions.set(token, {
+      ip: ip,
+      expireAt: expireAt,
+      createdAt: new Date().toISOString()
+    });
+    
+    return res.json({
+      success: true,
+      token: token,
+      message: '密码验证成功'
+    });
+  } else {
+    return res.json({
+      success: false,
+      error: '密码错误'
+    });
+  }
+});
+
+// 退出管理会话
+app.post('/api/admin/logout-session', (req, res) => {
+  const token = req.headers['x-admin-token'];
+  if (token) {
+    adminSessions.delete(token);
+  }
+  res.json({
+    success: true,
+    message: '已退出管理会话'
+  });
+});
+
+// 获取管理配置（需要管理权限）
+app.get('/api/admin/config', requireAdmin, (req, res) => {
   // TODO: 后续添加配置管理
   res.json({
     success: true,
@@ -153,8 +250,8 @@ app.get('/api/admin/config', requireHost, (req, res) => {
   });
 });
 
-// 获取顶置历史记录（仅主机）
-app.get('/api/admin/promote-history', requireHost, (req, res) => {
+// 获取顶置历史记录（需要管理权限）
+app.get('/api/admin/promote-history', requireAdmin, (req, res) => {
   const limit = parseInt(req.query.limit) || 50;
   const history = playQueue.getPromoteHistory(limit);
   res.json({
@@ -164,8 +261,8 @@ app.get('/api/admin/promote-history', requireHost, (req, res) => {
   });
 });
 
-// 清除顶置历史记录（仅主机）
-app.post('/api/admin/clear-promote-history', requireHost, (req, res) => {
+// 清除顶置历史记录（需要管理权限）
+app.post('/api/admin/clear-promote-history', requireAdmin, (req, res) => {
   playQueue.clearPromoteHistory();
   res.json({
     success: true,
@@ -173,8 +270,8 @@ app.post('/api/admin/clear-promote-history', requireHost, (req, res) => {
   });
 });
 
-// 获取限额配置（仅主机）
-app.get('/api/admin/quota-config', requireHost, (req, res) => {
+// 获取限额配置（需要管理权限）
+app.get('/api/admin/quota-config', requireAdmin, (req, res) => {
   const config = quotaManager.getConfig();
   res.json({
     success: true,
@@ -182,8 +279,8 @@ app.get('/api/admin/quota-config', requireHost, (req, res) => {
   });
 });
 
-// 更新限额配置（仅主机）- 保持向后兼容
-app.post('/api/admin/quota-config', requireHost, (req, res) => {
+// 更新限额配置（需要管理权限）- 保持向后兼容
+app.post('/api/admin/quota-config', requireAdmin, (req, res) => {
   const { timeWindow, maxSongs } = req.body;
   
   if (!timeWindow || !maxSongs) {
@@ -215,8 +312,8 @@ app.post('/api/admin/quota-config', requireHost, (req, res) => {
   });
 });
 
-// 更新操作限额配置（仅主机）
-app.post('/api/admin/operation-quota-config', requireHost, (req, res) => {
+// 更新操作限额配置（需要管理权限）
+app.post('/api/admin/operation-quota-config', requireAdmin, (req, res) => {
   const { operationType, timeWindow, maxOperations } = req.body;
   
   if (!operationType || !timeWindow || !maxOperations) {
@@ -365,6 +462,26 @@ app.get('/api/song/detail/:id', async (req, res) => {
 app.get('/api/lyric/:id', async (req, res) => {
   const { id } = req.params;
   const result = await musicApi.getLyric(id);
+  res.json(result);
+});
+
+// 检查歌曲是否被喜欢
+app.get('/api/song/like/check/:id', async (req, res) => {
+  const { id } = req.params;
+  const result = await musicApi.checkIsLiked(id);
+  res.json(result);
+});
+
+// 喜欢/取消喜欢歌曲
+app.post('/api/song/like', async (req, res) => {
+  const { id, like } = req.body;
+  if (!id) {
+    return res.json({ success: false, error: '缺少歌曲ID' });
+  }
+  // 明确传递布尔值：like为true时喜欢，为false时取消喜欢
+  const isLike = like === true;
+  console.log(`API接收: 歌曲${id}, 操作: ${isLike ? '喜欢' : '取消喜欢'}, 原始参数:`, like);
+  const result = await musicApi.toggleLike(id, isLike);
   res.json(result);
 });
 

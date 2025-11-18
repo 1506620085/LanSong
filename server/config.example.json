@@ -1,6 +1,8 @@
 {
   "loginMethod": "qrcode",
   "port": 3000,
-  "comment": "loginMethod 可选值: qrcode (推荐) 或 password"
+  "adminPassword": "admin123",
+  "comment": "loginMethod 可选值: qrcode (推荐) 或 password",
+  "adminPasswordComment": "管理设置密码，主机无需密码，其他用户需要输入此密码访问管理页面"
 }
 

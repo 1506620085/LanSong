@@ -59,6 +59,16 @@ export default {
     return api.get(`/api/lyric/${id}`)
   },
 
+  // 检查歌曲是否被喜欢
+  checkIsLiked(id) {
+    return api.get(`/api/song/like/check/${id}`)
+  },
+
+  // 喜欢/取消喜欢歌曲
+  toggleLike(id, like = true) {
+    return api.post('/api/song/like', { id, like })
+  },
+
   // 获取播放队列
   getQueue() {
     return api.get('/api/queue')
@@ -131,27 +141,58 @@ export default {
 
   // 管理相关
   checkAdminPermission() {
-    return api.get('/api/admin/check')
+    const token = localStorage.getItem('adminToken')
+    return api.get('/api/admin/check', {
+      headers: token ? { 'x-admin-token': token } : {}
+    })
+  },
+  verifyAdminPassword(password) {
+    return api.post('/api/admin/verify-password', { password })
+  },
+  logoutAdminSession() {
+    const token = localStorage.getItem('adminToken')
+    return api.post('/api/admin/logout-session', {}, {
+      headers: token ? { 'x-admin-token': token } : {}
+    })
   },
   getAdminConfig() {
-    return api.get('/api/admin/config')
+    const token = localStorage.getItem('adminToken')
+    return api.get('/api/admin/config', {
+      headers: token ? { 'x-admin-token': token } : {}
+    })
   },
   getPromoteHistory(limit = 50) {
-    return api.get('/api/admin/promote-history', { params: { limit } })
+    const token = localStorage.getItem('adminToken')
+    return api.get('/api/admin/promote-history', { 
+      params: { limit },
+      headers: token ? { 'x-admin-token': token } : {}
+    })
   },
   clearPromoteHistory() {
-    return api.post('/api/admin/clear-promote-history')
+    const token = localStorage.getItem('adminToken')
+    return api.post('/api/admin/clear-promote-history', {}, {
+      headers: token ? { 'x-admin-token': token } : {}
+    })
   },
   // 限额配置
   getQuotaConfig() {
-    return api.get('/api/admin/quota-config')
+    const token = localStorage.getItem('adminToken')
+    return api.get('/api/admin/quota-config', {
+      headers: token ? { 'x-admin-token': token } : {}
+    })
   },
   updateQuotaConfig(timeWindow, maxSongs) {
-    return api.post('/api/admin/quota-config', { timeWindow, maxSongs })
+    const token = localStorage.getItem('adminToken')
+    return api.post('/api/admin/quota-config', { timeWindow, maxSongs }, {
+      headers: token ? { 'x-admin-token': token } : {}
+    })
   },
   // 操作限额配置
   updateOperationQuotaConfig(operationType, timeWindow, maxOperations) {
-    return api.post('/api/admin/operation-quota-config', { operationType, timeWindow, maxOperations })
+    const token = localStorage.getItem('adminToken')
+    return api.post('/api/admin/operation-quota-config', { operationType, timeWindow, maxOperations }, {
+      headers: token ? { 'x-admin-token': token } : {}
+    })
   },
   getQuotaStatus() {
     return api.get('/api/quota/status')

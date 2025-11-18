@@ -12,7 +12,9 @@ const {
   cloudsearch, 
   song_url, 
   song_detail, 
-  lyric 
+  lyric,
+  like,
+  likelist
 } = require('NeteaseCloudMusicApi');
 
 const COOKIE_FILE = path.join(__dirname, 'cookie.json');
@@ -414,6 +416,87 @@ class MusicApi {
       }
     } catch (error) {
       console.error('获取歌词异常:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // 获取用户喜欢的音乐列表
+  async getLikeList(uid) {
+    try {
+      const result = await likelist({
+        uid,
+        cookie: this.cookie
+      });
+
+      if (result.body.code === 200) {
+        const ids = result.body.ids || [];
+        return {
+          success: true,
+          ids: ids
+        };
+      } else {
+        return { success: false, error: '获取喜欢列表失败' };
+      }
+    } catch (error) {
+      console.error('获取喜欢列表异常:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // 喜欢/取消喜欢音乐
+  async toggleLike(id, isLike = true) {
+    try {
+      console.log(`${isLike ? '喜欢' : '取消喜欢'}音乐 ID: ${id}`);
+      
+      // 注意：NeteaseCloudMusicApi 库要求 like 参数必须是字符串 'true' 或 'false'
+      // 直接传递布尔值会导致取消喜欢失败（已知bug）
+      const result = await like({
+        id,
+        like: isLike ? 'true' : 'false',  // 转换为字符串
+        cookie: this.cookie
+      });
+
+      console.log('网易云API返回:', result.body);
+
+      if (result.body.code === 200) {
+        return {
+          success: true,
+          liked: isLike
+        };
+      } else {
+        console.error('操作失败:', result.body);
+        return { success: false, error: result.body.message || result.body.msg || '操作失败' };
+      }
+    } catch (error) {
+      console.error('喜欢音乐异常:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // 检查歌曲是否被喜欢
+  async checkIsLiked(songId) {
+    try {
+      // 获取用户信息
+      const accountResult = await this.getUserInfo();
+      if (!accountResult.success) {
+        return { success: false, error: '未登录' };
+      }
+
+      const uid = accountResult.data.userId;
+      
+      // 获取喜欢列表
+      const likelistResult = await this.getLikeList(uid);
+      if (!likelistResult.success) {
+        return { success: false, error: likelistResult.error };
+      }
+
+      const isLiked = likelistResult.ids.includes(parseInt(songId));
+      return {
+        success: true,
+        liked: isLiked
+      };
+    } catch (error) {
+      console.error('检查喜欢状态异常:', error.message);
       return { success: false, error: error.message };
     }
   }

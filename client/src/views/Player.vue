@@ -60,6 +60,18 @@
               :disabled="!hasPrevious"
             />
             <el-button
+              circle
+              size="large"
+              @click="toggleLike"
+              :class="{ 'like-button': true, 'liked': isLiked }"
+              :disabled="!currentSong || likingInProgress"
+              :loading="likingInProgress"
+            >
+              <svg class="heart-icon" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+                <path d="M923 283.6c-13.4-31.1-32.6-58.9-56.9-82.8-24.3-23.8-52.5-42.4-84-55.5-32.5-13.5-66.9-20.3-102.4-20.3-49.3 0-97.4 13.5-139.2 39-10 6.1-19.5 12.8-28.5 20.1-9-7.3-18.5-14-28.5-20.1-41.8-25.5-89.9-39-139.2-39-35.5 0-69.9 6.8-102.4 20.3-31.4 13-59.7 31.7-84 55.5-24.4 23.9-43.5 51.7-56.9 82.8-13.9 32.3-20.9 66.5-20.9 101.9 0 33.3 6.8 68 20.3 103.3 11.3 29.5 27.5 60.1 48.2 91 32.8 48.9 77.9 99.9 133.9 151.6 92.8 85.7 184.7 144.9 188.6 147.3l23.7 15.2c10.5 6.7 24 6.7 34.5 0l23.7-15.2c3.9-2.5 95.7-61.6 188.6-147.3 56-51.7 101.1-102.7 133.9-151.6 20.7-30.9 37-61.5 48.2-91 13.5-35.3 20.3-70 20.3-103.3 0.1-35.3-7-69.6-20.9-101.9z" />
+              </svg>
+            </el-button>
+            <el-button
               :icon="isPlaying ? VideoPause : VideoPlay"
               circle
               size="large"
@@ -211,6 +223,10 @@ const duration = ref(0)
 const volume = ref(80)
 const hasPrevious = ref(false)
 
+// 喜欢状态
+const isLiked = ref(false)
+const likingInProgress = ref(false)
+
 // 格式化相对时间
 const formatRelativeTime = (timeStr) => {
   if (!timeStr) return ''
@@ -277,12 +293,16 @@ const playSong = async (song) => {
         currentSong.value = song
         isPlaying.value = true
         ElMessage.success(`正在播放: ${song.name}`)
+        // 检查喜欢状态
+        checkLikeStatus(song.id)
       } catch (playError) {
         console.error('播放失败:', playError)
         ElMessage.error('播放失败，可能需要用户交互后才能播放')
         // 设置歌曲但不自动播放，等待用户手动点击
         currentSong.value = song
         isPlaying.value = false
+        // 检查喜欢状态
+        checkLikeStatus(song.id)
       }
     } else {
       ElMessage.error('获取播放链接失败')
@@ -311,6 +331,58 @@ const stopPlayback = () => {
   currentTime.value = 0
   duration.value = 0
   console.log('播放已完全停止')
+}
+
+// 检查歌曲是否被喜欢
+const checkLikeStatus = async (songId) => {
+  if (!songId) {
+    isLiked.value = false
+    return
+  }
+  
+  try {
+    const result = await api.checkIsLiked(songId)
+    if (result.success) {
+      isLiked.value = result.liked
+    } else {
+      isLiked.value = false
+    }
+  } catch (error) {
+    console.error('检查喜欢状态失败:', error)
+    isLiked.value = false
+  }
+}
+
+// 切换喜欢状态
+const toggleLike = async () => {
+  if (!currentSong.value || likingInProgress.value) return
+  
+  likingInProgress.value = true
+  const songId = currentSong.value.id
+  const willLike = !isLiked.value
+  
+  console.log(`前端操作: 歌曲${songId} (${currentSong.value.name})`, {
+    当前状态: isLiked.value ? '已喜欢' : '未喜欢',
+    操作: willLike ? '喜欢' : '取消喜欢',
+    参数: willLike
+  })
+  
+  try {
+    const result = await api.toggleLike(songId, willLike)
+    console.log('后端返回:', result)
+    
+    if (result.success) {
+      isLiked.value = willLike
+      ElMessage.success(willLike ? '已添加到我喜欢的音乐' : '已取消喜欢')
+    } else {
+      ElMessage.error(result.error || '操作失败')
+    }
+  } catch (error) {
+    console.error('切换喜欢状态失败:', error)
+    ElMessage.error('操作失败，请检查登录状态')
+  } finally {
+    likingInProgress.value = false
+  }
 }
 
 // 切换播放/暂停
@@ -740,6 +812,55 @@ onUnmounted(() => {
   width: 70px !important;
   height: 70px !important;
   font-size: 32px !important;
+}
+
+.like-button {
+  transition: all 0.3s ease;
+}
+
+.heart-icon {
+  width: 1.2em;
+  height: 1.2em;
+  transition: all 0.3s ease;
+}
+
+.like-button:not(.liked) .heart-icon {
+  fill: #909399;
+}
+
+.like-button:not(.liked):hover .heart-icon {
+  fill: #f56c6c;
+}
+
+.like-button:not(.liked):hover {
+  transform: scale(1.1);
+}
+
+.like-button.liked {
+  background: #fef0f0 !important;
+  border-color: #fde2e2 !important;
+  animation: likeAnimation 0.5s ease;
+}
+
+.like-button.liked .heart-icon {
+  fill: #f56c6c;
+}
+
+.like-button.liked:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(245, 108, 108, 0.3);
+}
+
+@keyframes likeAnimation {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 .volume-control {

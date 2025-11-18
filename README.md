@@ -49,18 +49,21 @@ cp server/config.example.json server/config.json
 ```json
 {
   "loginMethod": "qrcode",
-  "port": 3000
+  "port": 3000,
+  "adminPassword": "your_secure_password"
 }
 ```
 
-**登录方式说明**：
-- `"qrcode"` - 二维码登录（推荐）：启动时扫码登录，安全便捷
-- `"password"` - 手机号密码登录：需要配置 `phone` 和 `password` 字段（不推荐，容易被风控）
+**配置说明**：
+- `loginMethod` - 登录方式
+  - `"qrcode"` - 二维码登录（推荐）：启动时扫码登录，安全便捷
+  - `"password"` - 手机号密码登录：需要配置 `phone` 和 `password` 字段（不推荐，容易被风控）
+- `adminPassword` - 管理密码：用于非主机用户访问管理设置（默认：admin123，请务必修改）
 
-⚠️ **推荐使用二维码登录**：
-- 更安全，不需要保存密码
-- 不容易触发风控
-- 使用体验更好
+⚠️ **安全建议**：
+- 推荐使用二维码登录
+- 务必修改默认管理密码
+- 使用强密码保护管理设置
 
 ### 3. 启动服务
 
@@ -138,6 +141,7 @@ s-wyy/
 - 📖 [README.md](README.md) - 项目说明
 - 📘 [GUIDE.md](GUIDE.md) - 详细使用指南
 - 📝 [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) - 项目结构说明
+- 🔐 [ADMIN_PASSWORD.md](ADMIN_PASSWORD.md) - 管理密码功能说明
 - ❓ [FAQ.md](FAQ.md) - 常见问题解答
 - 📋 [CHANGELOG.md](CHANGELOG.md) - 更新日志
 

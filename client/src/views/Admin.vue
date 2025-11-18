@@ -6,17 +6,58 @@
       <p>正在验证权限...</p>
     </div>
 
-    <!-- 无权访问 -->
-    <div v-else-if="!isHost" class="access-denied">
-      <el-icon class="denied-icon"><WarningFilled /></el-icon>
-      <h2>无权访问</h2>
-      <p>仅运行服务的主机（{{ serverIP }}）可以访问管理页面</p>
-      <p class="current-ip">您的IP: {{ clientIP }}</p>
-      <el-button type="primary" @click="$router.push('/')">返回首页</el-button>
+    <!-- 需要密码验证 -->
+    <div v-else-if="!hasAdminAccess && !isHost" class="password-required">
+      <div class="password-card">
+        <el-icon class="lock-icon"><Lock /></el-icon>
+        <h2>管理员身份验证</h2>
+        <p class="hint-text">您不是主机用户，需要输入管理密码才能访问</p>
+        <p class="current-ip">您的IP: {{ clientIP }}</p>
+        <p class="server-hint">主机IP: {{ serverIP }}（无需密码）</p>
+        
+        <el-form @submit.prevent="handleVerifyPassword" style="margin-top: 30px;">
+          <el-form-item>
+            <el-input
+              v-model="adminPassword"
+              type="password"
+              placeholder="请输入管理密码"
+              size="large"
+              show-password
+              clearable
+              :disabled="verifying"
+              @keyup.enter="handleVerifyPassword"
+            >
+              <template #prefix>
+                <el-icon><Lock /></el-icon>
+              </template>
+            </el-input>
+          </el-form-item>
+          <el-form-item>
+            <el-button 
+              type="primary" 
+              size="large" 
+              style="width: 100%;"
+              :loading="verifying"
+              @click="handleVerifyPassword"
+            >
+              验证密码
+            </el-button>
+          </el-form-item>
+          <el-form-item>
+            <el-button 
+              size="large" 
+              style="width: 100%;"
+              @click="$router.push('/')"
+            >
+              返回首页
+            </el-button>
+          </el-form-item>
+        </el-form>
+      </div>
     </div>
 
     <!-- 管理界面 -->
-    <div v-else class="admin-container">
+    <div v-else-if="hasAdminAccess" class="admin-container">
       <div class="container">
         <!-- 头部 -->
         <div class="header">
@@ -26,8 +67,19 @@
           </h1>
           <p class="subtitle">主机管理控制面板</p>
           <div class="host-info">
-            <el-tag type="danger" size="large">主机</el-tag>
-            <span>{{ serverIP }}</span>
+            <el-tag :type="isHost ? 'danger' : 'warning'" size="large">
+              {{ isHost ? '主机' : '管理员' }}
+            </el-tag>
+            <span>{{ isHost ? serverIP : clientIP }}</span>
+            <el-button 
+              v-if="!isHost" 
+              type="danger" 
+              size="small" 
+              @click="handleLogout"
+              style="margin-left: 15px;"
+            >
+              退出管理
+            </el-button>
           </div>
         </div>
 
@@ -52,7 +104,13 @@
               </div>
               <div class="info-item">
                 <span class="label">管理权限：</span>
-                <el-tag type="success" size="small">主机</el-tag>
+                <el-tag :type="isHost ? 'success' : 'warning'" size="small">
+                  {{ isHost ? '主机（无限制）' : '管理员（密码验证）' }}
+                </el-tag>
+              </div>
+              <div class="info-item" v-if="!isHost">
+                <span class="label">会话到期：</span>
+                <span class="value">24小时</span>
               </div>
             </div>
           </el-card>
@@ -305,7 +363,8 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
   Loading, 
-  WarningFilled, 
+  WarningFilled,
+  Lock,
   Setting, 
   UserFilled, 
   Document, 
@@ -319,10 +378,15 @@ const router = useRouter()
 
 const checking = ref(true)
 const isHost = ref(false)
+const hasAdminAccess = ref(false)
 const serverIP = ref('')
 const clientIP = ref('')
 const users = ref([])
 const promoteHistory = ref([])
+
+// 密码验证
+const adminPassword = ref('')
+const verifying = ref(false)
 
 // 对话框状态
 const userDialogVisible = ref(false)
@@ -402,22 +466,20 @@ const formatRelativeTime = (timeStr) => {
   return time.toLocaleDateString('zh-CN')
 }
 
-// 验证是否是主机
+// 验证管理权限
 async function checkHostPermission() {
   try {
     const result = await api.checkAdminPermission()
     if (result.success) {
       isHost.value = result.isHost
+      hasAdminAccess.value = result.hasAdminAccess
       serverIP.value = result.serverIP
       clientIP.value = result.clientIP
       
-      if (!result.isHost) {
-        ElMessage.error('您没有权限访问管理页面')
-      } else {
-        // 加载用户列表和顶置历史
+      if (result.hasAdminAccess) {
+        // 有管理权限，加载数据
         await fetchUsers()
         await fetchPromoteHistory()
-        // 更新应用徽章
         updateAppBadges()
       }
     }
@@ -425,8 +487,68 @@ async function checkHostPermission() {
     console.error('权限验证失败:', error)
     ElMessage.error('权限验证失败')
     isHost.value = false
+    hasAdminAccess.value = false
   } finally {
     checking.value = false
+  }
+}
+
+// 验证管理密码
+async function handleVerifyPassword() {
+  if (!adminPassword.value) {
+    ElMessage.warning('请输入管理密码')
+    return
+  }
+  
+  verifying.value = true
+  try {
+    const result = await api.verifyAdminPassword(adminPassword.value)
+    if (result.success) {
+      // 保存token
+      localStorage.setItem('adminToken', result.token)
+      ElMessage.success('密码验证成功')
+      
+      // 重新检查权限
+      checking.value = true
+      await checkHostPermission()
+    } else {
+      ElMessage.error(result.error || '密码错误')
+      adminPassword.value = ''
+    }
+  } catch (error) {
+    console.error('密码验证失败:', error)
+    ElMessage.error('密码验证失败')
+  } finally {
+    verifying.value = false
+  }
+}
+
+// 退出管理会话
+async function handleLogout() {
+  try {
+    await ElMessageBox.confirm(
+      '确定要退出管理会话吗？退出后需要重新输入密码才能访问。',
+      '确认退出',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    
+    await api.logoutAdminSession()
+    localStorage.removeItem('adminToken')
+    ElMessage.success('已退出管理会话')
+    
+    // 重新检查权限
+    hasAdminAccess.value = false
+    checking.value = true
+    await checkHostPermission()
+  } catch (error) {
+    // 用户取消或退出失败
+    if (error !== 'cancel') {
+      console.error('退出失败:', error)
+    }
   }
 }
 
@@ -617,7 +739,8 @@ onMounted(() => {
 }
 
 .loading-container,
-.access-denied {
+.access-denied,
+.password-required {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -946,5 +1069,60 @@ onMounted(() => {
 .quota-preview strong {
   color: #1e3a8a;
   margin: 0 3px;
+}
+
+/* 密码验证界面 */
+.password-card {
+  background: white;
+  border-radius: 16px;
+  padding: 40px;
+  width: 90%;
+  max-width: 450px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.lock-icon {
+  font-size: 64px;
+  color: #667eea;
+  margin-bottom: 20px;
+}
+
+.password-card h2 {
+  font-size: 28px;
+  color: #333;
+  margin: 10px 0 15px 0;
+}
+
+.hint-text {
+  font-size: 15px;
+  color: #666;
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+
+.current-ip {
+  font-size: 14px;
+  color: #999;
+  margin: 5px 0;
+}
+
+.server-hint {
+  font-size: 13px;
+  color: #999;
+  margin: 5px 0 0 0;
+}
+
+@media (max-width: 768px) {
+  .password-card {
+    padding: 30px 20px;
+  }
+  
+  .lock-icon {
+    font-size: 48px;
+  }
+  
+  .password-card h2 {
+    font-size: 24px;
+  }
 }
 </style>
