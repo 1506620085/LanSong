@@ -3,6 +3,7 @@
   "port": 3000,
   "adminPassword": "admin123",
   "comment": "loginMethod 可选值: qrcode (推荐) 或 password",
-  "adminPasswordComment": "管理设置密码，主机无需密码，其他用户需要输入此密码访问管理页面"
+  "adminPasswordComment": "管理设置密码，主机无需密码，其他用户需要输入此密码访问管理页面",
+  "permissionsComment": "喜欢权限配置在 permissions.json 文件中，可在管理设置中配置"
 }
 

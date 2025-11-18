@@ -15,6 +15,32 @@ const crypto = require('crypto');
 // 读取配置文件
 const config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf-8'));
 
+// 读取权限配置文件
+const PERMISSIONS_FILE = path.join(__dirname, 'permissions.json');
+let permissions = { mode: 'all', allowedUsers: [] };
+try {
+  if (fs.existsSync(PERMISSIONS_FILE)) {
+    permissions = JSON.parse(fs.readFileSync(PERMISSIONS_FILE, 'utf-8'));
+    // 兼容旧版本配置，没有mode字段时默认为all
+    if (!permissions.mode) {
+      permissions.mode = permissions.allowedUsers && permissions.allowedUsers.length > 0 ? 'whitelist' : 'all';
+    }
+  }
+} catch (error) {
+  console.error('读取权限配置失败:', error.message);
+}
+
+// 保存权限配置
+function savePermissions() {
+  try {
+    fs.writeFileSync(PERMISSIONS_FILE, JSON.stringify(permissions, null, 2), 'utf-8');
+    return true;
+  } catch (error) {
+    console.error('保存权限配置失败:', error.message);
+    return false;
+  }
+}
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -35,18 +61,55 @@ if (fs.existsSync(publicPath)) {
   app.use(express.static(publicPath));
 }
 
-// 获取客户端真实IP地址
 // 获取服务器本机IP地址
 function getServerIP() {
   const interfaces = os.networkInterfaces();
+  const candidates = [];
+  
+  // 虚拟网卡关键词（小写）
+  const virtualAdapters = ['vmware', 'virtualbox', 'vbox', 'hyper-v', 'docker', 'meta', 'loopback', 'tunnel'];
+  
   for (const name of Object.keys(interfaces)) {
+    const nameLower = name.toLowerCase();
+    // 跳过已知的虚拟网卡
+    const isVirtual = virtualAdapters.some(keyword => nameLower.includes(keyword));
+    
     for (const iface of interfaces[name]) {
-      // 跳过内部地址和非 IPv4 地址
+      // 只处理IPv4且非内部地址
       if (iface.family === 'IPv4' && !iface.internal) {
-        return iface.address;
+        const ip = iface.address;
+        
+        // 判断是否是私有IP段（局域网）
+        const isPrivate = 
+          ip.startsWith('192.168.') ||  // C类私有地址
+          ip.startsWith('10.') ||         // A类私有地址
+          /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(ip); // B类私有地址
+        
+        if (isPrivate) {
+          // 记录候选IP，优先级：非虚拟网卡 > 虚拟网卡
+          candidates.push({
+            ip,
+            name,
+            isVirtual,
+            priority: isVirtual ? 1 : 0
+          });
+        }
       }
     }
   }
+  
+  // 按优先级排序：非虚拟网卡优先
+  candidates.sort((a, b) => a.priority - b.priority);
+  
+  if (candidates.length > 0) {
+    console.log(`🔍 检测到 ${candidates.length} 个局域网IP:`);
+    candidates.forEach(c => {
+      console.log(`   ${c.ip} (${c.name})${c.isVirtual ? ' [虚拟网卡]' : ' [物理网卡]'}`);
+    });
+    console.log(`✅ 选择: ${candidates[0].ip} (${candidates[0].name})`);
+    return candidates[0].ip;
+  }
+  
   return '127.0.0.1'; // 默认返回本地地址
 }
 
@@ -171,6 +234,23 @@ function requireAdmin(req, res, next) {
   });
 }
 
+// 检查用户是否有喜欢歌曲的权限
+function hasLikePermission(username, ip) {
+  // 主机用户始终有权限
+  if (isHost(ip)) {
+    return true;
+  }
+  
+  // 根据模式判断权限
+  if (permissions.mode === 'all') {
+    // 所有用户模式：所有人都有权限
+    return true;
+  } else {
+    // 白名单模式：检查用户名是否在白名单中
+    return permissions.allowedUsers && permissions.allowedUsers.includes(username);
+  }
+}
+
 // 检查管理权限
 app.get('/api/admin/check', (req, res) => {
   const ip = getClientIP(req);
@@ -241,13 +321,49 @@ app.post('/api/admin/logout-session', (req, res) => {
 
 // 获取管理配置（需要管理权限）
 app.get('/api/admin/config', requireAdmin, (req, res) => {
-  // TODO: 后续添加配置管理
   res.json({
     success: true,
     data: {
-      message: '管理配置功能待开发'
+      likePermissions: {
+        allowedUsers: permissions.allowedUsers || [],
+        mode: permissions.mode || 'all'
+      }
     }
   });
+});
+
+// 更新喜欢权限配置（需要管理权限）
+app.post('/api/admin/like-permissions', requireAdmin, (req, res) => {
+  const { allowedUsers, mode } = req.body;
+  
+  if (!Array.isArray(allowedUsers)) {
+    return res.json({
+      success: false,
+      error: '参数格式错误'
+    });
+  }
+  
+  if (mode && mode !== 'all' && mode !== 'whitelist') {
+    return res.json({
+      success: false,
+      error: '模式参数错误'
+    });
+  }
+  
+  permissions.allowedUsers = allowedUsers;
+  permissions.mode = mode || 'all';
+  
+  if (savePermissions()) {
+    res.json({
+      success: true,
+      message: '权限配置已更新'
+    });
+  } else {
+    res.json({
+      success: false,
+      error: '保存配置失败'
+    });
+  }
 });
 
 // 获取顶置历史记录（需要管理权限）
@@ -472,15 +588,77 @@ app.get('/api/song/like/check/:id', async (req, res) => {
   res.json(result);
 });
 
+// 检查喜欢权限
+app.get('/api/song/like/permission', (req, res) => {
+  const ip = getClientIP(req);
+  const user = ipManager.getUserByIP(ip);
+  const username = user?.username;
+  
+  // 主机用户始终有权限
+  if (isHost(ip)) {
+    return res.json({
+      success: true,
+      hasPermission: true,
+      isHost: true
+    });
+  }
+  
+  // 用户必须先设置用户名
+  if (!username) {
+    return res.json({
+      success: true,
+      hasPermission: false,
+      reason: 'needUsername',
+      message: '请先设置用户名'
+    });
+  }
+  
+  // 检查权限
+  const hasPermission = hasLikePermission(username, ip);
+  
+  res.json({
+    success: true,
+    hasPermission,
+    isHost: false,
+    reason: hasPermission ? null : 'noPermission',
+    message: hasPermission ? null : '您没有喜欢歌曲的权限'
+  });
+});
+
 // 喜欢/取消喜欢歌曲
 app.post('/api/song/like', async (req, res) => {
   const { id, like } = req.body;
   if (!id) {
     return res.json({ success: false, error: '缺少歌曲ID' });
   }
+  
+  const ip = getClientIP(req);
+  const user = ipManager.getUserByIP(ip);
+  const username = user?.username;
+  
+  // 检查权限
+  if (!isHost(ip)) {
+    // 用户必须先设置用户名
+    if (!username) {
+      return res.json({
+        success: false,
+        error: '请先设置用户名'
+      });
+    }
+    
+    // 检查喜欢权限
+    if (!hasLikePermission(username, ip)) {
+      return res.json({
+        success: false,
+        error: '您没有喜欢歌曲的权限',
+        noPermission: true
+      });
+    }
+  }
+  
   // 明确传递布尔值：like为true时喜欢，为false时取消喜欢
   const isLike = like === true;
-  console.log(`API接收: 歌曲${id}, 操作: ${isLike ? '喜欢' : '取消喜欢'}, 原始参数:`, like);
+  console.log(`API接收: 歌曲${id}, 操作: ${isLike ? '喜欢' : '取消喜欢'}, 用户: ${username || '主机'}, 原始参数:`, like);
   const result = await musicApi.toggleLike(id, isLike);
   res.json(result);
 });

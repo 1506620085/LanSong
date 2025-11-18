@@ -1,0 +1,7 @@
+{
+  "mode": "whitelist",
+  "allowedUsers": [
+    "123"
+  ],
+  "comment": "mode 可选值: all (所有用户) 或 whitelist (白名单), allowedUsers 为白名单用户列表"
+}

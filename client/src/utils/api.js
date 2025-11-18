@@ -64,6 +64,11 @@ export default {
     return api.get(`/api/song/like/check/${id}`)
   },
 
+  // 检查喜欢权限
+  checkLikePermission() {
+    return api.get('/api/song/like/permission')
+  },
+
   // 喜欢/取消喜欢歌曲
   toggleLike(id, like = true) {
     return api.post('/api/song/like', { id, like })
@@ -199,6 +204,13 @@ export default {
   },
   getAllQuotaStatus() {
     return api.get('/api/quota/all-status')
+  },
+  // 喜欢权限配置
+  updateLikePermissions(allowedUsers, mode) {
+    const token = localStorage.getItem('adminToken')
+    return api.post('/api/admin/like-permissions', { allowedUsers, mode }, {
+      headers: token ? { 'x-admin-token': token } : {}
+    })
   },
 }
 

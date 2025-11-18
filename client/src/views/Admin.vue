@@ -124,7 +124,10 @@
               @click="handleAppClick(app)"
             >
               <div class="app-icon" :style="{ background: app.color }">
-                <component :is="app.icon" class="icon" />
+                <svg v-if="app.id === 'likePermission'" class="icon heart-icon" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M923 283.6c-13.4-31.1-32.6-58.9-56.9-82.8-24.3-23.8-52.5-42.4-84-55.5-32.5-13.5-66.9-20.3-102.4-20.3-49.3 0-97.4 13.5-139.2 39-10 6.1-19.5 12.8-28.5 20.1-9-7.3-18.5-14-28.5-20.1-41.8-25.5-89.9-39-139.2-39-35.5 0-69.9 6.8-102.4 20.3-31.4 13-59.7 31.7-84 55.5-24.4 23.9-43.5 51.7-56.9 82.8-13.9 32.3-20.9 66.5-20.9 101.9 0 33.3 6.8 68 20.3 103.3 11.3 29.5 27.5 60.1 48.2 91 32.8 48.9 77.9 99.9 133.9 151.6 92.8 85.7 184.7 144.9 188.6 147.3l23.7 15.2c10.5 6.7 24 6.7 34.5 0l23.7-15.2c3.9-2.5 95.7-61.6 188.6-147.3 56-51.7 101.1-102.7 133.9-151.6 20.7-30.9 37-61.5 48.2-91 13.5-35.3 20.3-70 20.3-103.3 0.1-35.3-7-69.6-20.9-101.9z" fill="white" />
+                </svg>
+                <component v-else :is="app.icon" class="icon" />
               </div>
               <div class="app-name">{{ app.name }}</div>
               <el-badge 
@@ -352,6 +355,106 @@
             </el-button>
           </template>
         </el-dialog>
+
+        <!-- 喜欢权限对话框 -->
+        <el-dialog
+          v-model="likePermissionDialogVisible"
+          title="喜欢权限配置"
+          width="800px"
+          :close-on-click-modal="false"
+        >
+          <el-alert
+            title="说明"
+            type="info"
+            :closable="false"
+            style="margin-bottom: 20px;"
+          >
+            配置哪些用户可以喜欢歌曲，主机用户始终拥有权限
+          </el-alert>
+
+          <el-form label-width="100px">
+            <el-form-item label="权限模式">
+              <el-radio-group v-model="likePermissionMode">
+                <el-radio value="all">所有用户</el-radio>
+                <el-radio value="whitelist">白名单</el-radio>
+              </el-radio-group>
+              <div style="font-size: 12px; color: #999; margin-top: 5px;">
+                {{ likePermissionMode === 'all' ? '所有用户都可以喜欢歌曲' : '只有白名单内的用户可以喜欢歌曲' }}
+              </div>
+            </el-form-item>
+
+            <el-form-item label="用户列表" v-if="likePermissionMode === 'whitelist'">
+              <div style="width: 100%;">
+                <div style="margin-bottom: 10px; color: #666; font-size: 13px;">
+                  已授权 {{ likeAllowedUsers.length }} / {{ users.length }} 个用户
+                </div>
+                <el-table :data="users" stripe max-height="400" v-if="users.length > 0">
+                  <el-table-column prop="ip" label="IP地址" width="150" />
+                  <el-table-column prop="username" label="用户名" width="150">
+                    <template #default="{ row }">
+                      <span v-if="row.username">{{ row.username }}</span>
+                      <el-tag v-else type="info" size="small">未设置</el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="权限状态" width="120">
+                    <template #default="{ row }">
+                      <el-tag v-if="row.ip === serverIP || row.ip === '127.0.0.1'" type="danger" size="small">
+                        主机
+                      </el-tag>
+                      <el-tag v-else-if="row.username && likeAllowedUsers.includes(row.username)" type="success" size="small">
+                        已授权
+                      </el-tag>
+                      <el-tag v-else-if="row.username" type="info" size="small">
+                        未授权
+                      </el-tag>
+                      <el-tag v-else type="warning" size="small">
+                        需设置用户名
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="操作" width="150">
+                    <template #default="{ row }">
+                      <el-button v-if="row.ip === serverIP || row.ip === '127.0.0.1'" type="danger" size="small" disabled>
+                        主机用户
+                      </el-button>
+                      <el-button
+                        v-else-if="row.username && !likeAllowedUsers.includes(row.username)"
+                        type="primary"
+                        size="small"
+                        @click="addAllowedUser(row.username)"
+                      >
+                        赋予权限
+                      </el-button>
+                      <el-button
+                        v-else-if="row.username && likeAllowedUsers.includes(row.username)"
+                        type="danger"
+                        size="small"
+                        @click="removeAllowedUser(row.username)"
+                      >
+                        移除权限
+                      </el-button>
+                      <el-button v-else type="info" size="small" disabled>
+                        未设置用户名
+                      </el-button>
+                    </template>
+                  </el-table-column>
+                </el-table>
+                <el-empty
+                  v-else
+                  description="暂无用户"
+                  :image-size="80"
+                />
+              </div>
+            </el-form-item>
+          </el-form>
+
+          <template #footer>
+            <el-button @click="likePermissionDialogVisible = false">取消</el-button>
+            <el-button type="primary" @click="saveLikePermissions" :loading="savingLikePermission">
+              保存配置
+            </el-button>
+          </template>
+        </el-dialog>
       </div>
     </div>
   </div>
@@ -393,6 +496,12 @@ const userDialogVisible = ref(false)
 const historyDialogVisible = ref(false)
 const quotaDialogVisible = ref(false)
 const quotaSaving = ref(false)
+const likePermissionDialogVisible = ref(false)
+
+// 喜欢权限配置
+const likePermissionMode = ref('all') // 'all' 或 'whitelist'
+const likeAllowedUsers = ref([])
+const savingLikePermission = ref(false)
 
 // 限额配置表单
 const activeQuotaTab = ref('song')
@@ -433,6 +542,13 @@ const appList = ref([
     icon: DocumentAdd,
     color: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
     badge: 0
+  },
+  {
+    id: 'likePermission',
+    name: '喜欢权限',
+    icon: null,  // 使用自定义SVG爱心图标
+    color: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+    badge: 0
   }
 ])
 
@@ -448,6 +564,10 @@ const handleAppClick = async (app) => {
     case 'quota':
       await fetchQuotaConfig()
       quotaDialogVisible.value = true
+      break
+    case 'likePermission':
+      await fetchLikePermissions()
+      likePermissionDialogVisible.value = true
       break
   }
 }
@@ -629,6 +749,65 @@ function formatTime(timeStr) {
   if (!timeStr) return '-'
   const date = new Date(timeStr)
   return date.toLocaleString('zh-CN')
+}
+
+// 获取喜欢权限配置
+async function fetchLikePermissions() {
+  try {
+    const result = await api.getAdminConfig()
+    if (result.success && result.data && result.data.likePermissions) {
+      const { allowedUsers, mode } = result.data.likePermissions
+      likePermissionMode.value = mode || 'all'
+      likeAllowedUsers.value = allowedUsers || []
+    }
+  } catch (error) {
+    console.error('获取喜欢权限配置失败:', error)
+    ElMessage.error('获取权限配置失败')
+  }
+}
+
+// 添加允许的用户
+function addAllowedUser(username) {
+  if (!username) {
+    ElMessage.warning('用户名无效')
+    return
+  }
+  if (likeAllowedUsers.value.includes(username)) {
+    ElMessage.warning('该用户已拥有权限')
+    return
+  }
+  likeAllowedUsers.value.push(username)
+  ElMessage.success(`已赋予 ${username} 喜欢权限`)
+}
+
+// 移除允许的用户
+function removeAllowedUser(username) {
+  const index = likeAllowedUsers.value.indexOf(username)
+  if (index > -1) {
+    likeAllowedUsers.value.splice(index, 1)
+    ElMessage.success(`已移除 ${username} 的喜欢权限`)
+  }
+}
+
+// 保存喜欢权限配置
+async function saveLikePermissions() {
+  savingLikePermission.value = true
+  try {
+    const allowedUsers = likePermissionMode.value === 'all' ? [] : likeAllowedUsers.value
+    const mode = likePermissionMode.value
+    const result = await api.updateLikePermissions(allowedUsers, mode)
+    if (result.success) {
+      ElMessage.success('权限配置已保存')
+      likePermissionDialogVisible.value = false
+    } else {
+      ElMessage.error(result.error || '保存失败')
+    }
+  } catch (error) {
+    console.error('保存喜欢权限配置失败:', error)
+    ElMessage.error('保存失败')
+  } finally {
+    savingLikePermission.value = false
+  }
 }
 
 // 获取限额配置
@@ -1021,6 +1200,11 @@ onMounted(() => {
   color: white;
 }
 
+.app-icon .heart-icon {
+  width: 36px;
+  height: 36px;
+}
+
 .app-name {
   font-size: 15px;
   font-weight: 500;
@@ -1047,6 +1231,11 @@ onMounted(() => {
   
   .app-icon .icon {
     font-size: 30px;
+  }
+  
+  .app-icon .heart-icon {
+    width: 30px;
+    height: 30px;
   }
   
   .app-name {
