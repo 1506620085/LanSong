@@ -546,9 +546,45 @@ app.post('/api/auth/logout', (req, res) => {
 // 生成客户端登录二维码
 app.get('/api/local-auth/qr/new', async (req, res) => {
   try {
-    const qrResult = await musicApi.loginWithQRCode();
-    res.json(qrResult);
+    const { login_qr_key, login_qr_create } = require('NeteaseCloudMusicApi');
+    
+    // 1. 获取二维码 key
+    const keyResult = await login_qr_key({
+      timestamp: Date.now()
+    });
+
+    if (keyResult.body.code !== 200) {
+      console.error('✗ 获取客户端二维码 key 失败');
+      return res.json({ success: false, error: '获取二维码 key 失败' });
+    }
+
+    const key = keyResult.body.data.unikey;
+    
+    // 2. 生成二维码（获取base64图片）
+    const qrResult = await login_qr_create({
+      key,
+      qrimg: true,
+      timestamp: Date.now()
+    });
+
+    if (qrResult.body.code !== 200) {
+      console.error('✗ 生成客户端二维码失败');
+      return res.json({ success: false, error: '生成二维码失败' });
+    }
+
+    const qrUrl = qrResult.body.data.qrurl;
+    const qrImg = qrResult.body.data.qrimg;
+
+    console.log('✓ 已生成客户端登录二维码');
+    
+    res.json({
+      success: true,
+      key,
+      qrUrl,
+      qrImg
+    });
   } catch (e) {
+    console.error('✗ 生成客户端二维码异常:', e.message);
     res.json({ success: false, error: e.message });
   }
 });
@@ -578,6 +614,8 @@ app.get('/api/local-auth/qr/status', async (req, res) => {
       const cookie = result.body.cookie;
       clientAuthManager.setClientCookie(ip, cookie, remember);
       
+      console.log(`✓ 客户端 ${ip} 登录成功`);
+      
       return res.json({ 
         success: true, 
         status: 'success',
@@ -585,25 +623,26 @@ app.get('/api/local-auth/qr/status', async (req, res) => {
       });
     } else if (code === 800) {
       return res.json({ 
-        success: false, 
+        success: true,  // 改为true，表示请求成功，只是状态是过期
         status: 'expired',
         message: '二维码已过期'
       });
     } else if (code === 802) {
       return res.json({ 
-        success: false, 
+        success: true,  // 改为true，表示请求成功，只是状态是已扫码
         status: 'scanned',
         message: '已扫码，等待确认'
       });
     } else if (code === 801) {
       return res.json({ 
-        success: false, 
+        success: true,  // 改为true，表示请求成功，只是状态是等待中
         status: 'waiting',
         message: '等待扫码'
       });
     } else {
+      console.warn(`⚠ 未知的二维码状态码: ${code}`);
       return res.json({ 
-        success: false, 
+        success: true, 
         status: 'unknown',
         message: result.body.message || '未知状态'
       });

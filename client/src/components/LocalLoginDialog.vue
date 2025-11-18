@@ -61,13 +61,17 @@ async function generateQr() {
   
   try {
     const result = await createLocalQr()
+    console.log('✓ 二维码数据:', result)
     qrData.value = result
     
     if (result.success) {
+      console.log('✓ 开始轮询检查二维码状态...')
       startPolling()
+    } else {
+      console.error('✗ 生成二维码失败:', result.error)
     }
   } catch (error) {
-    console.error('生成二维码失败:', error)
+    console.error('✗ 生成二维码异常:', error)
     qrData.value = { success: false, error: error.message || '网络错误' }
   }
 }
@@ -85,12 +89,17 @@ function startPolling() {
   if (pollTimer) clearInterval(pollTimer)
   
   pollTimer = setInterval(async () => {
-    if (!qrData.value || !qrData.value.key) return
+    if (!qrData.value || !qrData.value.key) {
+      console.warn('⚠ 缺少二维码key，停止轮询')
+      return
+    }
     
     try {
       const result = await checkLocalQrStatus(qrData.value.key, rememberMe.value)
+      console.log('📱 二维码状态检查结果:', result)
       
       if (result.status === 'success') {
+        console.log('✓ 登录成功！')
         status.value = 'success'
         stopPolling()
         ElMessage.success('登录成功！')
@@ -103,13 +112,19 @@ function startPolling() {
         emit('success')
         emit('close')
       } else if (result.status === 'scanned') {
+        console.log('📱 已扫码，等待确认...')
         status.value = 'scanned'
       } else if (result.status === 'expired') {
+        console.log('⏰ 二维码已过期')
         status.value = 'expired'
         stopPolling()
+      } else if (result.status === 'waiting') {
+        console.log('⏳ 等待扫码...')
+      } else {
+        console.warn('⚠ 未知状态:', result)
       }
     } catch (error) {
-      console.error('检查二维码状态失败:', error)
+      console.error('✗ 检查二维码状态异常:', error)
     }
   }, 3000) // 每3秒检查一次
 }
