@@ -15,6 +15,8 @@
           <el-icon><Iphone /></el-icon>
           <p>请使用<strong>网易云音乐APP</strong>扫描二维码</p>
           <p class="sub-text">登录后可访问您的喜欢歌单和创建的歌单</p>
+          <p class="countdown-text" v-if="countdown > 0">二维码将在 <span class="countdown-num">{{ countdown }}s</span> 后过期</p>
+          <p class="countdown-text expired" v-else>二维码已过期</p>
         </div>
         <div v-else-if="status === 'scanned'" class="status-scanned">
           <el-icon class="success-icon"><SuccessFilled /></el-icon>
@@ -52,12 +54,31 @@ const qrData = ref(null)
 const status = ref('waiting') // waiting, scanned, expired, success
 const rememberMe = ref(true)
 const refreshing = ref(false)
+const countdown = ref(120)
 let pollTimer = null
+let countdownTimer = null
+
+// 开始倒计时
+function startCountdown() {
+  countdown.value = 120
+  if (countdownTimer) clearInterval(countdownTimer)
+  
+  countdownTimer = setInterval(() => {
+    countdown.value -= 1
+    if (countdown.value <= 0) {
+      clearInterval(countdownTimer)
+      countdownTimer = null
+      status.value = 'expired'
+      stopPolling()
+    }
+  }, 1000)
+}
 
 // 生成二维码
 async function generateQr() {
   qrData.value = null
   status.value = 'waiting'
+  countdown.value = 120
   
   try {
     const result = await createLocalQr()
@@ -66,6 +87,7 @@ async function generateQr() {
     
     if (result.success) {
       console.log('✓ 开始轮询检查二维码状态...')
+      startCountdown()
       startPolling()
     } else {
       console.error('✗ 生成二维码失败:', result.error)
@@ -129,11 +151,15 @@ function startPolling() {
   }, 3000) // 每3秒检查一次
 }
 
-// 停止轮询
+// 停止轮询和倒计时
 function stopPolling() {
   if (pollTimer) {
     clearInterval(pollTimer)
     pollTimer = null
+  }
+  if (countdownTimer) {
+    clearInterval(countdownTimer)
+    countdownTimer = null
   }
 }
 
@@ -223,6 +249,22 @@ onUnmounted(() => {
   font-size: 13px;
   color: #999;
   margin-top: -8px;
+}
+
+.status-waiting .countdown-text {
+  font-size: 13px;
+  color: #666;
+  margin-top: -4px;
+}
+
+.status-waiting .countdown-num {
+  color: #409eff;
+  font-weight: 600;
+}
+
+.status-waiting .countdown-text.expired {
+  color: #e6a23c;
+  font-weight: 500;
 }
 
 .status-scanned {

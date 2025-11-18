@@ -2,33 +2,50 @@
   <el-dialog 
     v-model="visible" 
     title="登录网易云音乐" 
-    width="420px" 
+    width="450px" 
     :close-on-click-modal="false"
     :append-to-body="true"
     :center="true"
     align-center
   >
-    <div v-if="loading" class="center">
-      <el-icon class="spin"><Loading /></el-icon>
-      <div class="hint">正在生成二维码...</div>
-    </div>
-    <div v-else>
-      <div class="qr-wrap" v-if="qrImg">
-        <img :src="qrImg" class="qr" />
+    <div class="login-dialog">
+      <div v-if="loading" class="loading">
+        <el-icon class="is-loading"><Loading /></el-icon>
+        <p>正在生成二维码...</p>
       </div>
-      <!-- 记住我选项 -->
-      <div class="remember-me" v-if="qrImg">
-        <el-checkbox v-model="rememberMe" size="small">
-          记住我（7天内免登录）
-        </el-checkbox>
+
+      <div v-else-if="qrImg" class="qr-container">
+        <div class="qr-code">
+          <img :src="qrImg" alt="二维码" />
+        </div>
+        
+        <div class="status-info">
+          <div v-if="status === 'waiting'" class="status-waiting">
+            <el-icon><Iphone /></el-icon>
+            <p>请使用<strong>网易云音乐APP</strong>扫描二维码</p>
+            <p class="countdown-text" v-if="countdown > 0">二维码将在 <span class="countdown-num">{{ countdown }}s</span> 后过期</p>
+            <p class="countdown-text expired" v-else>二维码已过期</p>
+          </div>
+          <div v-else-if="status === 'scanned'" class="status-scanned">
+            <el-icon class="success-icon"><SuccessFilled /></el-icon>
+            <p>已扫码，请在手机上确认登录</p>
+          </div>
+          <div v-else-if="status === 'expired'" class="status-expired">
+            <el-icon class="error-icon"><CircleCloseFilled /></el-icon>
+            <p>二维码已过期</p>
+            <el-button type="primary" @click="refreshQr" :loading="loading">刷新二维码</el-button>
+          </div>
+        </div>
+
+        <div class="remember-me">
+          <el-checkbox v-model="rememberMe">记住我（7天免登录）</el-checkbox>
+        </div>
       </div>
-      <div class="status">
-        <span v-if="countdown > 0">二维码将在 {{ countdown }}s 后过期</span>
-        <span v-else class="warn">二维码已过期</span>
-      </div>
-      <div class="actions">
-        <el-button @click="refreshQr" :loading="loading">重新生成</el-button>
-        <el-button type="primary" @click="close">关闭</el-button>
+
+      <div v-else class="error">
+        <el-icon class="error-icon"><CircleCloseFilled /></el-icon>
+        <p>生成二维码失败</p>
+        <el-button type="primary" @click="refreshQr">重试</el-button>
       </div>
     </div>
   </el-dialog>
@@ -37,7 +54,7 @@
 <script setup>
 import { ref, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Loading } from '@element-plus/icons-vue'
+import { Loading, Iphone, SuccessFilled, CircleCloseFilled } from '@element-plus/icons-vue'
 import { createQr, checkQrStatus } from '../utils/auth'
 
 const visible = ref(false)
@@ -47,7 +64,8 @@ const qrImg = ref('')
 const timer = ref(null)
 const poller = ref(null)
 const countdown = ref(120)
-const rememberMe = ref(false)
+const rememberMe = ref(true)
+const status = ref('waiting') // waiting, scanned, expired
 
 const open = async () => {
   visible.value = true
@@ -75,21 +93,24 @@ const startPolling = () => {
     if (!qrKey.value) return
     try {
       const res = await checkQrStatus(qrKey.value, rememberMe.value)
+      
       if (res.status === 'success') {
-        if (rememberMe.value) {
-          ElMessage.success('登录成功！7天内免登录')
-        } else {
-          ElMessage.success('登录成功')
-        }
+        status.value = 'success'
+        stopTimers()
+        ElMessage.success('登录成功！')
         close()
         // 刷新页面状态
         window.dispatchEvent(new CustomEvent('auth-updated'))
+      } else if (res.status === 'scanned') {
+        status.value = 'scanned'
       } else if (res.status === 'expired') {
-        ElMessage.warning('二维码已过期，请重新生成')
+        status.value = 'expired'
         stopTimers()
+      } else if (res.status === 'waiting') {
+        status.value = 'waiting'
       }
     } catch (e) {
-      // ignore
+      console.error('检查二维码状态失败:', e)
     }
   }, 3000)
 }
@@ -102,6 +123,7 @@ const stopTimers = () => {
 const refreshQr = async () => {
   stopTimers()
   loading.value = true
+  status.value = 'waiting'
   try {
     const res = await createQr()
     if (res?.success) {
@@ -124,40 +146,146 @@ onUnmounted(stopTimers)
 </script>
 
 <style scoped>
-.center {
+.login-dialog {
+  padding: 20px 0;
+}
+
+.loading {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 20px 0;
-}
-.spin { animation: spin 1s linear infinite; font-size: 32px; }
-@keyframes spin { to { transform: rotate(360deg); } }
-.qr-wrap { 
-  display: flex; 
   justify-content: center;
-  margin-bottom: 12px;
+  padding: 40px 0;
+  color: #666;
 }
-.qr { 
-  width: 260px; 
-  height: 260px; 
-  border-radius: 8px; 
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
+
+.loading .el-icon {
+  font-size: 40px;
+  margin-bottom: 16px;
+  color: #409eff;
 }
-.remember-me {
+
+.qr-container {
   display: flex;
-  justify-content: flex-end;
-  padding: 0 20px;
-  margin-bottom: 8px;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
 }
-.remember-me :deep(.el-checkbox__label) {
+
+.qr-code {
+  width: 200px;
+  height: 200px;
+  padding: 12px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qr-code img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.status-info {
+  text-align: center;
+  min-height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.status-waiting,
+.status-scanned,
+.status-expired {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-waiting .el-icon {
+  font-size: 36px;
+  color: #409eff;
+}
+
+.status-waiting p {
+  margin: 0;
+  font-size: 15px;
+  color: #333;
+}
+
+.status-waiting .countdown-text {
   font-size: 13px;
   color: #666;
-  user-select: none;
+  margin-top: -8px;
 }
-.status { text-align: center; margin: 10px 0; color: #666; }
-.status .warn { color: #e6a23c; }
-.actions { display: flex; justify-content: flex-end; gap: 10px; }
+
+.status-waiting .countdown-num {
+  color: #409eff;
+  font-weight: 600;
+}
+
+.status-waiting .countdown-text.expired {
+  color: #e6a23c;
+  font-weight: 500;
+}
+
+.status-scanned {
+  color: #67c23a;
+}
+
+.status-scanned .success-icon {
+  font-size: 40px;
+}
+
+.status-scanned p {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.status-expired {
+  color: #f56c6c;
+}
+
+.status-expired .error-icon {
+  font-size: 40px;
+}
+
+.status-expired p {
+  margin: 0 0 12px 0;
+  font-size: 15px;
+}
+
+.remember-me {
+  width: 100%;
+  padding: 16px 0 0 0;
+  border-top: 1px solid #eee;
+  display: flex;
+  justify-content: center;
+}
+
+.error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 40px 0;
+  color: #f56c6c;
+}
+
+.error .error-icon {
+  font-size: 48px;
+}
+
+.error p {
+  margin: 0;
+  font-size: 14px;
+}
 </style>
 
 <style>
