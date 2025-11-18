@@ -10,6 +10,7 @@ const musicApi = require('./api');
 const playQueue = require('./queue');
 const ipManager = require('./ip-manager');
 const quotaManager = require('./quota-manager');
+const clientAuthManager = require('./client-auth-manager');
 const crypto = require('crypto');
 
 // 读取配置文件
@@ -538,6 +539,147 @@ app.post('/api/auth/logout', (req, res) => {
   musicApi.logout();
   io.emit('auth-status', { isLoggedIn: false });
   res.json({ success: true });
+});
+
+// ============ 客户端独立登录 API ============
+
+// 生成客户端登录二维码
+app.get('/api/local-auth/qr/new', async (req, res) => {
+  try {
+    const qrResult = await musicApi.loginWithQRCode();
+    res.json(qrResult);
+  } catch (e) {
+    res.json({ success: false, error: e.message });
+  }
+});
+
+// 查询客户端登录二维码状态
+app.get('/api/local-auth/qr/status', async (req, res) => {
+  const { key, rememberMe } = req.query;
+  const ip = getClientIP(req);
+  
+  if (!key) return res.json({ success: false, error: '缺少 key' });
+  
+  const remember = rememberMe === 'true' || rememberMe === true;
+  
+  // 使用临时的musicApi实例检查二维码状态
+  const { login_qr_check, user_account } = require('NeteaseCloudMusicApi');
+  
+  try {
+    const result = await login_qr_check({
+      key,
+      timestamp: Date.now()
+    });
+
+    const code = result.body.code;
+    
+    if (code === 803) {
+      // 登录成功，保存该客户端的Cookie
+      const cookie = result.body.cookie;
+      clientAuthManager.setClientCookie(ip, cookie, remember);
+      
+      return res.json({ 
+        success: true, 
+        status: 'success',
+        message: '登录成功',
+      });
+    } else if (code === 800) {
+      return res.json({ 
+        success: false, 
+        status: 'expired',
+        message: '二维码已过期'
+      });
+    } else if (code === 802) {
+      return res.json({ 
+        success: false, 
+        status: 'scanned',
+        message: '已扫码，等待确认'
+      });
+    } else if (code === 801) {
+      return res.json({ 
+        success: false, 
+        status: 'waiting',
+        message: '等待扫码'
+      });
+    } else {
+      return res.json({ 
+        success: false, 
+        status: 'unknown',
+        message: result.body.message || '未知状态'
+      });
+    }
+  } catch (error) {
+    console.error('✗ 检查客户端二维码状态异常:', error.message);
+    return res.json({ success: false, error: error.message });
+  }
+});
+
+// 获取客户端登录状态
+app.get('/api/local-auth/status', async (req, res) => {
+  const ip = getClientIP(req);
+  const cookie = clientAuthManager.getClientCookie(ip);
+  
+  if (!cookie) {
+    return res.json({ success: true, isLoggedIn: false, profile: null });
+  }
+
+  // 验证Cookie是否有效
+  const { login_status, user_account } = require('NeteaseCloudMusicApi');
+  
+  try {
+    const statusResult = await login_status({
+      cookie: cookie,
+      timestamp: Date.now()
+    });
+    
+    const hasAccount = !!statusResult?.body?.data?.account;
+    
+    if (!hasAccount) {
+      // Cookie无效，删除
+      clientAuthManager.removeClientCookie(ip);
+      return res.json({ success: true, isLoggedIn: false, profile: null });
+    }
+
+    // 获取用户信息
+    const userResult = await user_account({
+      cookie: cookie,
+      timestamp: Date.now()
+    });
+
+    let profile = null;
+    if (userResult?.body?.code === 200 && userResult?.body?.profile) {
+      const p = userResult.body.profile;
+      profile = {
+        userId: p.userId,
+        nickname: p.nickname,
+        avatarUrl: p.avatarUrl,
+        vipType: p.vipType
+      };
+    }
+
+    return res.json({ success: true, isLoggedIn: true, profile });
+  } catch (error) {
+    console.error('检查客户端登录状态异常:', error.message);
+    return res.json({ success: false, error: error.message });
+  }
+});
+
+// 客户端退出登录
+app.post('/api/local-auth/logout', (req, res) => {
+  const ip = getClientIP(req);
+  const result = clientAuthManager.removeClientCookie(ip);
+  res.json(result);
+});
+
+// 获取客户端的Cookie（内部使用，用于API调用）
+app.get('/api/local-auth/cookie', (req, res) => {
+  const ip = getClientIP(req);
+  const cookie = clientAuthManager.getClientCookie(ip);
+  res.json({ 
+    success: true, 
+    cookie: cookie || null,
+    hasLogin: !!cookie
+  });
 });
 
 // 登录状态检查

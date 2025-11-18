@@ -13,32 +13,54 @@
       </div>
       <div class="right">
         <!-- 本机用户信息 -->
-        <el-dropdown trigger="hover">
-          <div class="local-user-info">
-            <el-icon class="local-user-icon"><Monitor /></el-icon>
-            <div class="local-user-details">
-              <span class="local-user-ip">
-                <span v-if="localUserInfo.isHost" class="host-badge">（主机）</span>
-                {{ localUserInfo.ip || '获取中...' }}
-              </span>
-              <span class="local-user-name" :class="{ 'no-username': !localUserInfo.username }">
-                {{ localUserInfo.username || '点击设置用户名' }}
-              </span>
+        <div class="local-user-container">
+          <el-dropdown trigger="hover">
+            <div class="local-user-info">
+              <el-icon class="local-user-icon"><Monitor /></el-icon>
+              <div class="local-user-details">
+                <span class="local-user-ip">
+                  <span v-if="localUserInfo.isHost" class="host-badge">（主机）</span>
+                  {{ localUserInfo.ip || '获取中...' }}
+                </span>
+                <span class="local-user-name" :class="{ 'no-username': !localUserInfo.username }">
+                  {{ localUserInfo.username || '点击设置用户名' }}
+                </span>
+              </div>
             </div>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item @click="showUsernameDialog = true">
+                  <el-icon><User /></el-icon>
+                  设置用户名
+                </el-dropdown-item>
+                <el-dropdown-item v-if="localUserInfo.isHost" divided @click="openAdmin">
+                  <el-icon><Setting /></el-icon>
+                  管理设置
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+          
+          <!-- 本机用户的网易云登录状态 -->
+          <div v-if="localAuthState.isLoggedIn && localAuthState.profile" class="local-auth-status">
+            <el-dropdown trigger="hover">
+              <div class="local-auth-trigger">
+                <img :src="localAuthState.profile.avatarUrl + '?param=28y28'" class="local-avatar" />
+                <span class="local-nickname">{{ localAuthState.profile.nickname }}</span>
+                <el-icon class="arrow-icon"><ArrowDown /></el-icon>
+              </div>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item @click="doLocalLogout">退出网易云</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item @click="showUsernameDialog = true">
-                <el-icon><User /></el-icon>
-                设置用户名
-              </el-dropdown-item>
-              <el-dropdown-item v-if="localUserInfo.isHost" divided @click="openAdmin">
-                <el-icon><Setting /></el-icon>
-                管理设置
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+          <div v-else class="local-auth-entry" @click="openLocalLogin">
+            <el-icon class="local-auth-icon"><User /></el-icon>
+            <span class="local-auth-text">网易云未登录</span>
+          </div>
+        </div>
         
         <!-- 竖条分隔符 -->
         <div class="divider"></div>
@@ -99,6 +121,16 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 本机用户登录对话框 -->
+    <el-dialog
+      v-model="showLocalLoginDialog"
+      title="本机网易云登录"
+      width="450px"
+      :close-on-click-modal="false"
+    >
+      <LocalLoginDialog @success="handleLocalLoginSuccess" @close="showLocalLoginDialog = false" />
+    </el-dialog>
   </div>
 </template>
 
@@ -107,8 +139,10 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Headset, User, Monitor, InfoFilled, ArrowDown, Setting } from '@element-plus/icons-vue'
 import { authState, fetchAuthStatus, logout } from '../utils/auth'
+import { localAuthState, fetchLocalAuthStatus, localLogout } from '../utils/localAuth'
 import api from '../utils/api'
 import { ElMessage } from 'element-plus'
+import LocalLoginDialog from './LocalLoginDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -124,9 +158,33 @@ const showUsernameDialog = ref(false)
 const newUsername = ref('')
 const settingUsername = ref(false)
 
+// 本机用户登录相关
+const showLocalLoginDialog = ref(false)
+
 function openLogin() {
   // 通过事件通知 App.vue 打开登录弹窗
   window.dispatchEvent(new CustomEvent('open-login-dialog'))
+}
+
+// 打开本机用户登录
+function openLocalLogin() {
+  showLocalLoginDialog.value = true
+}
+
+// 本机用户退出网易云登录
+async function doLocalLogout() {
+  try {
+    await localLogout()
+    ElMessage.success('已退出网易云登录')
+  } catch (error) {
+    ElMessage.error('退出失败')
+  }
+}
+
+// 本机用户登录成功
+function handleLocalLoginSuccess() {
+  showLocalLoginDialog.value = false
+  fetchLocalAuthStatus()
 }
 
 // 退出登录
@@ -187,8 +245,10 @@ async function handleSetUsername() {
 
 onMounted(() => {
   fetchAuthStatus()
+  fetchLocalAuthStatus()
   fetchLocalUserInfo()
   window.addEventListener('auth-updated', fetchAuthStatus)
+  window.addEventListener('local-auth-updated', fetchLocalAuthStatus)
 })
 </script>
 
@@ -341,6 +401,76 @@ onMounted(() => {
   color: #667eea;
   font-size: 13px;
   margin-top: -10px;
+}
+
+/* 本机用户容器样式 */
+.local-user-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 本机用户网易云登录状态样式 */
+.local-auth-status {
+  display: flex;
+  align-items: center;
+}
+
+.local-auth-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: rgba(102, 126, 234, 0.08);
+}
+
+.local-auth-trigger:hover {
+  background: rgba(102, 126, 234, 0.15);
+}
+
+.local-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.local-nickname {
+  font-size: 13px;
+  color: #667eea;
+  font-weight: 500;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.local-auth-entry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.local-auth-entry:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.local-auth-icon {
+  font-size: 14px;
+  color: #999;
+}
+
+.local-auth-text {
+  font-size: 12px;
+  color: #999;
 }
 </style>
 

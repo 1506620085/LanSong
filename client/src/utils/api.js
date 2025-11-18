@@ -119,7 +119,7 @@ export default {
     return api.post('/api/queue/promote', { queueId })
   },
 
-  // 认证相关
+  // 认证相关（主机全局登录）
   getAuthStatus() {
     return api.get('/api/auth/status')
   },
@@ -131,6 +131,23 @@ export default {
   },
   logout() {
     return api.post('/api/auth/logout')
+  },
+
+  // 客户端独立登录相关
+  getLocalAuthStatus() {
+    return api.get('/api/local-auth/status')
+  },
+  createLocalAuthQr() {
+    return api.get('/api/local-auth/qr/new')
+  },
+  checkLocalAuthQr(key, rememberMe = false) {
+    return api.get('/api/local-auth/qr/status', { params: { key, rememberMe } })
+  },
+  localLogout() {
+    return api.post('/api/local-auth/logout')
+  },
+  getLocalAuthCookie() {
+    return api.get('/api/local-auth/cookie')
   },
 
   // 用户管理相关
