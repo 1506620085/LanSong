@@ -152,7 +152,7 @@
                     :loading="addingMap[row.id]"
                   >
                     <el-icon><Plus /></el-icon>
-                    点歌
+                    点歌/双击
                   </el-button>
                 </template>
               </el-table-column>
