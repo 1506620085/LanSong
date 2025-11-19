@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import Request from '../views/Request.vue'
 import Player from '../views/Player.vue'
 import Admin from '../views/Admin.vue'
+import MyMusic from '../views/MyMusic.vue'
 
 const routes = [
   {
@@ -9,6 +10,12 @@ const routes = [
     name: 'Request',
     component: Request,
     meta: { title: '点歌' }
+  },
+  {
+    path: '/my-music',
+    name: 'MyMusic',
+    component: MyMusic,
+    meta: { title: '我的音乐' }
   },
   {
     path: '/player',

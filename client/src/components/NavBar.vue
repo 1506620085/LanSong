@@ -8,6 +8,7 @@
         </div>
         <div class="links">
           <el-button text :type="route.name==='Request' ? 'primary' : ''" @click="$router.push('/')">点歌</el-button>
+          <el-button text :type="route.name==='MyMusic' ? 'primary' : ''" @click="handleMyMusicClick">我的音乐</el-button>
           <el-button text :type="route.name==='Player' ? 'primary' : ''" @click="$router.push('/player')">播放器</el-button>
         </div>
       </div>
@@ -200,6 +201,18 @@ async function doLogout() {
 // 打开管理页面
 function openAdmin() {
   router.push('/admin')
+}
+
+// 点击我的音乐
+function handleMyMusicClick() {
+  // 检查是否登录网易云
+  if (!localAuthState.isLoggedIn) {
+    ElMessage.warning('请先登录网易云音乐')
+    showLocalLoginDialog.value = true
+    return
+  }
+  
+  router.push('/my-music')
 }
 
 // 获取本机用户信息

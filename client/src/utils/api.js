@@ -229,5 +229,13 @@ export default {
       headers: token ? { 'x-admin-token': token } : {}
     })
   },
+
+  // 我的音乐相关
+  getMyPlaylists() {
+    return api.get('/api/my-music/playlists')
+  },
+  getPlaylistDetail(id) {
+    return api.get(`/api/my-music/playlist/detail/${id}`)
+  },
 }
 

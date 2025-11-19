@@ -721,6 +721,140 @@ app.get('/api/local-auth/cookie', (req, res) => {
   });
 });
 
+// ============ 我的音乐相关 API ============
+
+// 获取用户歌单
+app.get('/api/my-music/playlists', async (req, res) => {
+  const ip = getClientIP(req);
+  const cookie = clientAuthManager.getClientCookie(ip);
+  
+  if (!cookie) {
+    return res.json({ success: false, error: '请先登录网易云账号' });
+  }
+
+  try {
+    const { user_account, user_playlist } = require('NeteaseCloudMusicApi');
+    
+    // 获取用户ID
+    const userResult = await user_account({
+      cookie: cookie,
+      timestamp: Date.now()
+    });
+
+    if (userResult?.body?.code !== 200 || !userResult?.body?.profile) {
+      return res.json({ success: false, error: '获取用户信息失败' });
+    }
+
+    const userId = userResult.body.profile.userId;
+
+    // 获取用户歌单
+    const playlistResult = await user_playlist({
+      uid: userId,
+      cookie: cookie,
+      timestamp: Date.now()
+    });
+
+    if (playlistResult?.body?.code !== 200) {
+      return res.json({ success: false, error: '获取歌单列表失败' });
+    }
+
+    const playlists = playlistResult.body.playlist || [];
+    
+    // 分类歌单：创建的和收藏的
+    const created = [];
+    const subscribed = [];
+
+    playlists.forEach(pl => {
+      const playlist = {
+        id: pl.id,
+        name: pl.name,
+        coverImgUrl: pl.coverImgUrl,
+        trackCount: pl.trackCount,
+        playCount: pl.playCount,
+        description: pl.description,
+        creator: {
+          userId: pl.creator.userId,
+          nickname: pl.creator.nickname
+        }
+      };
+
+      if (pl.creator.userId === userId) {
+        created.push(playlist);
+      } else {
+        subscribed.push(playlist);
+      }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        created,
+        subscribed
+      }
+    });
+  } catch (error) {
+    console.error('获取用户歌单异常:', error.message);
+    res.json({ success: false, error: error.message });
+  }
+});
+
+// 获取歌单详情
+app.get('/api/my-music/playlist/detail/:id', async (req, res) => {
+  const ip = getClientIP(req);
+  const cookie = clientAuthManager.getClientCookie(ip);
+  const playlistId = req.params.id;
+  
+  if (!cookie) {
+    return res.json({ success: false, error: '请先登录网易云账号' });
+  }
+
+  try {
+    const { playlist_detail } = require('NeteaseCloudMusicApi');
+    
+    const result = await playlist_detail({
+      id: playlistId,
+      cookie: cookie,
+      timestamp: Date.now()
+    });
+
+    if (result?.body?.code !== 200 || !result?.body?.playlist) {
+      return res.json({ success: false, error: '获取歌单详情失败' });
+    }
+
+    const playlist = result.body.playlist;
+    const tracks = (playlist.tracks || []).map(track => ({
+      id: track.id,
+      name: track.name,
+      artists: track.ar.map(artist => ({
+        id: artist.id,
+        name: artist.name
+      })),
+      album: {
+        id: track.al.id,
+        name: track.al.name,
+        picUrl: track.al.picUrl
+      },
+      duration: track.dt
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        id: playlist.id,
+        name: playlist.name,
+        coverImgUrl: playlist.coverImgUrl,
+        description: playlist.description,
+        trackCount: playlist.trackCount,
+        playCount: playlist.playCount,
+        tracks
+      }
+    });
+  } catch (error) {
+    console.error('获取歌单详情异常:', error.message);
+    res.json({ success: false, error: error.message });
+  }
+});
+
 // 登录状态检查
 app.get('/api/status', (req, res) => {
   res.json({
